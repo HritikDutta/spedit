@@ -12,4 +12,6 @@ bool RenderNewAnimationDialog(Application& app, const UI::Font& font, gn::darray
 // Returns size of the panel
 Vector2 RenderAnimationInfo(Application& app, const UI::Font& font, gn::darray<Animation>& animations, int& index, const Vector3& topLeft);
 
+void RenderFrameInfo(Application& app, const UI::Font& font, gn::darray<AnimationFrame>& frames, int& selectedFrameIndex);
+
 void ResetAnimations(gn::darray<Animation>& animations);

@@ -166,6 +166,144 @@ Vector2 RenderAnimationInfo(Application& app, const UI::Font& font, gn::darray<A
     return Vector2 { 0.0f, height - topLeft.y };
 }
 
+void RenderFrameInfo(Application& app, const UI::Font& font, gn::darray<AnimationFrame>& frames, int& selectedFrameIndex)
+{
+    static bool initialized = false;
+    constexpr f32 hgap = 10.0f;
+    static f32 numericInputWidth = UI::GetRenderedTextSize("1920", font).x + 20.0f;
+
+    static f32 windowWidth;
+
+    if (!initialized)
+    {
+        windowWidth = UI::GetRenderedTextSize("X:\t", font).x +
+                    numericInputWidth + hgap +
+                    UI::GetRenderedTextSize("Y:\t", font).x +
+                    numericInputWidth + hgap +
+                    UI::GetRenderedTextSize("W:\t", font).x +
+                    numericInputWidth + hgap +
+                    UI::GetRenderedTextSize("H:\t", font).x +
+                    numericInputWidth + hgap +
+                    UI::GetRenderedTextSize("Pivot x: ", font).x +
+                    numericInputWidth + hgap +
+                    UI::GetRenderedTextSize("Pivot Y: ", font).x +
+                    numericInputWidth + hgap +
+                    UI::GetRenderedTextSize("Delete", font).x + 20.0f
+                    ;
+
+        initialized = true;
+    }
+
+    AnimationFrame& frame = frames[selectedFrameIndex];
+
+    static const f32 y = app.refScreenHeight - UI::GetRenderedTextSize("F", font).y - 20.0f;
+    f32 x = (app.refScreenWidth - windowWidth) / 2.0f;
+
+    {   // Position X
+        std::string_view label = "X:\t";
+        Vector2 size = UI::GetRenderedTextSize(label, font);
+        UI::RenderText(app, label, font, white, Vector3(x, y, 0.0f));
+
+        static std::string text;
+        s32 num = frame.topLeft.x;
+
+        Vector3 inputPos(x + size.x, y - 5.0f, 0.0f);
+        UI::RenderNumericInputi(app, GenUIID(), num, text, font, Vector2(10.0f, 5.0f), inputPos, numericInputWidth);
+
+        frame.topLeft.x = num;
+
+        x += size.x + numericInputWidth + hgap;
+    }
+
+    {   // Position Y
+        std::string_view label = "Y:\t";
+        Vector2 size = UI::GetRenderedTextSize(label, font);
+        UI::RenderText(app, label, font, white, Vector3(x, y, 0.0f));
+
+        static std::string text;
+        s32 num = frame.topLeft.y;
+
+        Vector3 inputPos(x + size.x, y - 5.0f, 0.0f);
+        UI::RenderNumericInputi(app, GenUIID(), num, text, font, Vector2(10.0f, 5.0f), inputPos, numericInputWidth);
+
+        frame.topLeft.y = num;
+
+        x += size.x + numericInputWidth + hgap;
+    }
+
+    {   // Width
+        std::string_view label = "W:\t";
+        Vector2 size = UI::GetRenderedTextSize(label, font);
+        UI::RenderText(app, label, font, white, Vector3(x, y, 0.0f));
+
+        static std::string text;
+        s32 num = frame.size.x;
+
+        Vector3 inputPos(x + size.x, y - 5.0f, 0.0f);
+        UI::RenderNumericInputi(app, GenUIID(), num, text, font, Vector2(10.0f, 5.0f), inputPos, numericInputWidth);
+
+        frame.size.x = num;
+
+        x += size.x + numericInputWidth + hgap;
+    }
+    
+    {   // Height
+        std::string_view label = "H:\t";
+        Vector2 size = UI::GetRenderedTextSize(label, font);
+        UI::RenderText(app, label, font, white, Vector3(x, y, 0.0f));
+
+        static std::string text;
+        s32 num = frame.size.y;
+
+        Vector3 inputPos(x + size.x, y - 5.0f, 0.0f);
+        UI::RenderNumericInputi(app, GenUIID(), num, text, font, Vector2(10.0f, 5.0f), inputPos, numericInputWidth);
+
+        frame.size.y = num;
+
+        x += size.x + numericInputWidth + hgap;
+    }
+
+    {   // Pivot X
+        std::string_view label = "Pivot X: ";
+        Vector2 size = UI::GetRenderedTextSize(label, font);
+        UI::RenderText(app, label, font, white, Vector3(x, y, 0.0f));
+
+        static std::string text;
+
+        Vector3 inputPos(x + size.x, y - 5.0f, 0.0f);
+        UI::RenderNumericInputf(app, GenUIID(), frame.pivot.x, text, font, Vector2(10.0f, 5.0f), inputPos, numericInputWidth);
+        
+        x += size.x + numericInputWidth + hgap;
+    }
+    
+    {   // Pivot Y
+        std::string_view label = "Pivot Y: ";
+        Vector2 size = UI::GetRenderedTextSize(label, font);
+        UI::RenderText(app, label, font, white, Vector3(x, y, 0.0f));
+
+        static std::string text;
+
+        Vector3 inputPos(x + size.x, y - 5.0f, 0.0f);
+        UI::RenderNumericInputf(app, GenUIID(), frame.pivot.y, text, font, Vector2(10.0f, 5.0f), inputPos, numericInputWidth);
+        
+        x += size.x + numericInputWidth + hgap;
+    }
+
+    {   // Delete Button
+        std::string_view text = "Delete";
+        Vector2 size = UI::GetRenderedTextSize(text, font);
+
+        Vector3 position(x, y - 5.0f, 0.0f);
+        if (app.GetKeyDown(KEY(DELETE)) || UI::RenderTextButton(app, GenUIID(), text, font, Vector2(10.0f, 5.0f), position))
+        {
+            frames.erase_at(selectedFrameIndex);
+            selectedFrameIndex = -1;
+        }
+
+        x += size.x + hgap;
+    }
+}
+
 void ResetAnimations(gn::darray<Animation>& animations)
 {
     animations.clear();

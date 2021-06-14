@@ -978,4 +978,224 @@ void RenderNumericInputf(Application& app, ID id, f32& num, std::string& text, c
     }
 }
 
+void RenderNumericInputi(Application& app, ID id, s32& num, std::string& text, const Font& font,
+                         Vector2 padding, Vector3 topLeft, f32 width)
+{
+    Rect containerRect;
+    containerRect.topLeft = topLeft;
+    containerRect.size = Vector2(width, font.fontHeight * 0.65f + 2.0f * padding.y);
+
+    RenderRect(app, containerRect, Vector4(0.5f, 0.5f, 0.5f, 1.0f));
+
+    static char character;
+    static bool isTyping = false;
+    static bool callbackHasBeenSet = false;
+
+    static s32 selection[2] = {};
+    static s32 cursorIndex = 0;
+    static f64 lastMoveTime = 0.0;
+
+    static Vector4 textColor = Vector4(1.0f);
+
+    if (uiData.active != id)
+    {
+        char buffer[128];
+        sprintf(buffer, "%d", num);
+        text = buffer;
+    }
+
+    if (app.mouseX >= containerRect.topLeft.x && app.mouseX <= containerRect.topLeft.x + containerRect.size.x &&
+        app.mouseY >= containerRect.topLeft.y && app.mouseY <= containerRect.topLeft.y + containerRect.size.y)
+    {
+        if (uiData.hot != id)
+            uiData.hot = id;
+
+        if (app.GetMouseButtonDown(MOUSE(1)))
+        {
+            uiData.active = id;
+        }
+    }
+    else
+    {
+        if (uiData.hot == id)
+            uiData.hot = UIInvalid();
+
+        if (uiData.active == id && app.GetMouseButtonDown(MOUSE(1)))
+        {
+            // @Todo: This ignores if this has been set active externally
+            uiData.active = UIInvalid();
+            app.charCallback = [](Application& app, u32 codepoint) {};
+            callbackHasBeenSet = false;
+
+#           ifdef DEBUG
+            std::cout << "Focus Removed\n";
+#           endif
+        }
+    }
+
+    if (uiData.active == id && !callbackHasBeenSet)
+    {
+        callbackHasBeenSet = true;
+        cursorIndex = 0;
+        
+        app.charCallback = [](Application& app, u32 codepoint)
+        {
+            character = (char) codepoint;
+
+            if ((character >= '0' && character <= '9') || character == '.')
+                isTyping = true;
+        };
+    }
+
+    Vector2 size = GetRenderedTextSize(text, font);
+    std::string_view textToShow = text;
+    f32 avgLetterWidth = size.x / text.length();
+    s32 maxLetters = (s32) ((width - 2.0f * padding.x) / avgLetterWidth);
+
+    if (uiData.active != id)
+    {
+        s32 numLettersToShow = (maxLetters < text.length()) ? maxLetters : text.length();
+        Vector3 position = Vector3(topLeft.x + padding.x, topLeft.y + padding.y, topLeft.z);
+        RenderText(app, textToShow.substr(0, numLettersToShow), font, Vector4(1.0f), position);
+    }
+    else
+    {
+        if (isTyping)
+        {
+            if (selection[0] != selection[1])
+                text.erase(text.begin() + selection[0], text.begin() + selection[1]);
+
+            text.insert(text.begin() + selection[0], character);
+            selection[1] = ++selection[0];
+            isTyping = false;
+        }
+
+        if (IsPressed(app, KEY(BACKSPACE)))
+        {
+            if (selection[0] != selection[1])
+            {
+                text.erase(text.begin() + selection[0], text.begin() + selection[1]);
+                selection[1] = selection[0];
+            }
+            else if (app.GetKey(KEY(LEFT_CONTROL)) && selection[0] > 0)
+            {
+                int start;
+                for (start = selection[0]; start > 0 && text[start] == ' '; start--);
+                for (; start > 0 && text[start] != ' '; start--);
+
+                text.erase(text.begin() + start, text.begin() + selection[0]);
+                selection[0] = selection[1] = start;
+            }
+            else if (selection[0] > 0)
+            {
+                selection[0] = --selection[1];
+                text.erase(text.begin() + selection[0]);
+            }
+        }
+
+        if (IsPressed(app, KEY(DELETE)))
+        {
+            if (selection[0] != selection[1])
+            {
+                text.erase(text.begin() + selection[0], text.begin() + selection[1]);
+                selection[1] = selection[0];
+            }
+            else if (app.GetKey(KEY(LEFT_CONTROL)) && selection[0] > 0)
+            {
+                int end;
+                for (end = selection[0]; end < text.length() && text[end] == ' '; end++);
+                for (; end < text.length() && text[end] != ' '; end++);
+
+                text.erase(text.begin() + selection[0], text.begin() + end);
+                selection[1] = selection[0];
+            }
+            else if (selection[0] < text.length())
+            {
+                text.erase(text.begin() + selection[0]);
+            }
+        }
+
+        if (IsPressed(app, KEY(DELETE)) && selection[1] < text.length())
+            text.erase(text.begin() + selection[1] + 1);
+
+        if (IsPressed(app, KEY(LEFT)))
+        {
+            if (selection[0] == selection[1])
+                cursorIndex = 0;
+
+            selection[cursorIndex] = selection[cursorIndex] - 1;
+            selection[0] = std::max(selection[0], 0);
+            selection[1] = std::max(selection[1], selection[0]);
+
+            if (!app.GetKey(KEY(LEFT_SHIFT)) && !app.GetKey(KEY(RIGHT_SHIFT)))
+                selection[1 - cursorIndex] = selection[cursorIndex];
+
+            lastMoveTime = app.time;
+        }
+
+        if (IsPressed(app, KEY(RIGHT)))
+        {
+            if (selection[0] == selection[1])
+                cursorIndex = 1;
+
+            selection[cursorIndex] = selection[cursorIndex] + 1;
+            selection[1] = std::min(selection[1], (int) text.length());
+            selection[0] = std::min(selection[0], selection[1]);
+
+            if (!app.GetKey(KEY(LEFT_SHIFT)) && !app.GetKey(KEY(RIGHT_SHIFT)))
+                selection[1 - cursorIndex] = selection[cursorIndex];
+
+            lastMoveTime = app.time;
+        }
+
+        if (app.GetKeyDown(KEY(ESCAPE)) || app.GetKeyDown(KEY(ENTER)) || app.GetKeyDown(KEY(KP_ENTER)))
+        {
+            uiData.active = UIInvalid();
+            app.charCallback = [](Application& app, u32 codepoint) {};
+            callbackHasBeenSet = false;
+        }
+
+        s32 numLettersToShow = std::min(maxLetters, (s32) text.length());
+
+        // Place cursor at mouse
+        if (app.GetMouseButtonDown(MOUSE(1)))
+        {
+            f32 mouseXOffset = app.mouseX - topLeft.x - padding.x;
+            selection[0] = selection[1] = std::max(std::min((s32) ((mouseXOffset / avgLetterWidth) + 0.3f), numLettersToShow), 0);
+        }
+
+        s32 start = std::max(selection[0] - numLettersToShow, 0);
+
+        Vector3 position = Vector3(topLeft.x + padding.x, topLeft.y + padding.y, topLeft.z);
+        if (selection[0] == selection[1])
+        {
+            RenderText(app, textToShow.substr(start, numLettersToShow), font, textColor, position);
+
+            Vector2 prevSize = GetRenderedTextSize(textToShow.substr(start, std::min(selection[0], numLettersToShow)), font);
+        
+            Rect caret;
+            caret.topLeft = Vector3(topLeft.x + padding.x + prevSize.x, topLeft.y + padding.y, topLeft.z);
+            caret.size = Vector2(2.0f, 0.7f * font.fontHeight);
+
+            f32 caretAlpha = 0.5 * (sin(10.0 * (app.time - lastMoveTime)) + 1.0);
+            RenderRect(app, caret, { 0.0f, 0.0f, 0.0f, caretAlpha });
+        }
+        else
+        {
+            RenderText(app, textToShow.substr(start, selection[0] - start), font, textColor, position);
+            f32 hoffset = GetRenderedTextSize(textToShow.substr(start, selection[0] - start), font).x;
+
+            RenderTextBox(app, textToShow.substr(selection[0], selection[1] - selection[0]), font,
+                          textColor, Vector4(0.3f, 0.3f, 0.3f, 1.0f), Vector2(), position + Vector3(hoffset, 0.0f, 0.0f));
+            hoffset += GetRenderedTextSize(textToShow.substr(selection[0], selection[1] - selection[0]), font).x;
+
+            RenderText(app, textToShow.substr(selection[1], numLettersToShow - selection[1]), font, textColor, position + Vector3(hoffset, 0.0f, 0.0f));
+        }
+
+        {   // Update number
+            sscanf(text.c_str(), "%d", &num);
+        }
+    }
+}
+
 } // namespace UI

@@ -77,6 +77,9 @@ void RenderTextInput(Application& app, ID id, std::string& text, const Font& fon
 void RenderNumericInputf(Application& app, ID id, f32& num, std::string& text, const Font& font,
                          Vector2 padding, Vector3 topLeft, f32 width);
 
+void RenderNumericInputi(Application& app, ID id, s32& num, std::string& text, const Font& font,
+                         Vector2 padding, Vector3 topLeft, f32 width);
+
 } // namespace UI
 
 #define GenUIID() (UI::ID { __LINE__, 0 })

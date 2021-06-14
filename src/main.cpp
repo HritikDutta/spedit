@@ -29,6 +29,7 @@ std::string fullpath, filename = "Empty";
 
 gn::darray<Animation> animations;
 s32 selectedAnimationIndex = -1;
+s32 selectedFrameIndex = -1;
 
 bool isDragging = false;
 UI::Rect drawingRect;
@@ -108,6 +109,7 @@ int main()
                     mouseStartPos.x = std::max((f32) app.mouseX, imagePosition.x);
                     mouseStartPos.y = std::max((f32) app.mouseY, imagePosition.y);
                     isDragging = true;
+                    selectedFrameIndex = -1;
                 }
             } else if (isDragging && app.GetMouseButton(MOUSE(1)))
             {
@@ -134,7 +136,9 @@ int main()
             {
                 if (drawingRect.size.x > 0.0f && drawingRect.size.y > 0.0f)
                 {
-                    AnimationFrame frame;
+                    selectedFrameIndex = animations[selectedAnimationIndex].frames.size();
+                    
+                    AnimationFrame& frame = animations[selectedAnimationIndex].frames.emplace_back();
                     frame.topLeft.x = drawingRect.topLeft.x;
                     frame.topLeft.y = drawingRect.topLeft.y;
 
@@ -142,8 +146,6 @@ int main()
                     frame.size.y = drawingRect.size.y;
 
                     frame.pivot.x = frame.pivot.y = 0.5f;
-
-                    animations[selectedAnimationIndex].frames.emplace_back(frame);
                 }
 
                 isDragging = false;
@@ -164,8 +166,9 @@ int main()
 
                 if (selectedAnimationIndex > -1)
                 {
-                    for (auto& frame : animations[selectedAnimationIndex].frames)
+                    for (int i = 0; i < animations[selectedAnimationIndex].frames.size(); i++)
                     {
+                        AnimationFrame& frame = animations[selectedAnimationIndex].frames[i];
                         UI::Rect displayRect;
                     
                         displayRect.topLeft.x = scale * frame.topLeft.x + imagePosition.x;
@@ -173,7 +176,9 @@ int main()
                     
                         displayRect.size = scale * frame.size;
 
-                        UI::RenderRect(app, displayRect, green);
+                        const Vector4& color = (i == selectedFrameIndex) ? orange : green;
+                        if (UI::RenderButton(app, GenUIIDWithSec(i), displayRect, color, lgreen, orange))
+                            selectedFrameIndex = (i == selectedFrameIndex) ? -1 : i;
                     }
 
                     if (isDragging)
@@ -273,11 +278,6 @@ int main()
                 // @Todo: Fill this later
                 OutputToJSONFile(fullpath, filename, animations);
             }
-
-            if (imageLoadError)
-            {
-                // Show Error
-            }
         }
 
         if (imageLoaded)
@@ -329,6 +329,8 @@ int main()
                             selectedAnimationIndex = -1;
                         else
                             selectedAnimationIndex = i;
+
+                        selectedFrameIndex = -1;
                     }
 
                     height += size.y + vgap;
@@ -346,6 +348,11 @@ int main()
 
                     height += 10.0f;
                 }
+            }
+
+            if (selectedFrameIndex != -1)
+            {   // List Animation Frame Data
+                RenderFrameInfo(app, font, animations[selectedAnimationIndex].frames, selectedFrameIndex);
             }
 
             if (RenderNewAnimationDialog(app, font, animations))
