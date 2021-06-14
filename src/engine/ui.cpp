@@ -489,11 +489,25 @@ bool RenderButton(Application& app, ID id, const Rect& rect, Vector4 defaultColo
 
 void RenderImage(Application& app, Image& image, Vector3 topLeft, Vector4 tint)
 {
-    Rect rect;
-    rect.topLeft = topLeft;
-    rect.size = Vector2(image.scaledWidth, image.scaledHeight);
+    // Only draw the part of the rect that is inside the screen
 
-    Vector4 texCoords(0.0f, 0.0f, 1.0f, 1.0f);
+    Rect rect;
+    rect.topLeft.x = std::max(0.0f, topLeft.x);
+    rect.topLeft.y = std::max(0.0f, topLeft.y);
+    rect.topLeft.z = topLeft.z;
+
+    f32 amountCoveredX = rect.topLeft.x - topLeft.x;
+    f32 amountCoveredY = rect.topLeft.y - topLeft.y;
+
+    rect.size.x = std::min(app.refScreenWidth - rect.topLeft.x,  (f32) image.scaledWidth - amountCoveredX);
+    rect.size.y = std::min(app.refScreenHeight - rect.topLeft.y, (f32) image.scaledHeight - amountCoveredY);
+
+    f32 s1 = amountCoveredX / image.scaledWidth;
+    f32 t1 = amountCoveredY / image.scaledHeight;
+    f32 s2 = (rect.size.x + amountCoveredX) / image.scaledWidth;
+    f32 t2 = (rect.size.y + amountCoveredY) / image.scaledHeight;
+
+    Vector4 texCoords(s1, t1, s2, t2);
     AddTexturedQuad(app, rect, texCoords, image.texID, tint);
 }
 

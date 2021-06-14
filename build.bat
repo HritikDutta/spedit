@@ -24,18 +24,18 @@ set debug_compile_flags=/Zi /EHsc /std:c++17 /DDEBUG /cgthreads8 /MP7
 set debug_link_flags=/NODEFAULTLIB:LIBCMT /DEBUG
 
 rem Source
-cl %compile_flags% /c src/misc/*.cpp %includes% & ^
-cl %compile_flags% /c src/math/*.cpp %includes% & ^
-cl %compile_flags% /c src/engine/*.cpp %includes% & ^
-cl %compile_flags% /c src/platform/*.cpp %includes% & ^
-cl %compile_flags% /c src/program/*.cpp %includes% & ^
-cl %compile_flags% /c src/main.cpp %includes% & ^
+cl %debug_compile_flags% /c src/misc/*.cpp %includes% & ^
+cl %debug_compile_flags% /c src/math/*.cpp %includes% & ^
+cl %debug_compile_flags% /c src/engine/*.cpp %includes% & ^
+cl %debug_compile_flags% /c src/platform/*.cpp %includes% & ^
+cl %debug_compile_flags% /c src/program/*.cpp %includes% & ^
+cl %debug_compile_flags% /c src/main.cpp %includes% & ^
 
 rem Resources
 rc resources.rc
 
 rem Link and Make Executable
-link *.obj %objs% %libs% *.res /OUT:spedit.exe %link_flags%
+link *.obj %objs% %libs% *.res /OUT:spedit.exe %debug_link_flags%
 
 rem Delete Intermediate Files
 del *.obj
