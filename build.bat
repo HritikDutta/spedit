@@ -19,6 +19,8 @@ set objs= dependencies\stb\obj\*.obj
 
 set compile_flags=/O2 /EHsc /std:c++17 /DNDEBUG /cgthreads8 /MP7 /GL
 set link_flags=/NODEFAULTLIB:LIBCMT /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup /LTCG
+
+set debug_compile_flags=/Zi /EHsc /std:c++17 /DDEBUG /cgthreads8 /MP7
 set debug_link_flags=/NODEFAULTLIB:LIBCMT /DEBUG
 
 rem Source

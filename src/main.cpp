@@ -222,7 +222,6 @@ int main()
                         fullpath = std::move(newpath);
 
                         ResetAnimations(animations);
-                        selectedAnimationIndex = -1;
                         
                         UI::Image temp;
                         imageLoadError = !temp.Load(fullpath.c_str());
@@ -239,7 +238,7 @@ int main()
                 
                 if (!imageLoadError)
                 {
-                    selectedAnimationIndex = -1;
+                    selectedFrameIndex = selectedAnimationIndex = -1;
 
                     bg.Free();
 
@@ -371,6 +370,7 @@ int main()
                 }
 
                 selectedAnimationIndex = animations.size() - 1;
+                selectedFrameIndex = -1;
             }
         }
 
