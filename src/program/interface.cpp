@@ -7,7 +7,8 @@
 #include "animation.h"
 #include "colors.h"
 
-static bool showDialogue = false;
+static bool showRenameAnimationDialogue = false;
+static bool showNewAnimationDialogue    = false;
 static s32  numAnimations = 1;
 static UI::ID textInputID = GenUIID();
 
@@ -15,19 +16,19 @@ static std::string defaultName = "animation_0";
 
 void ShowNewAnimationDialog()
 {
-    showDialogue = true;
+    showNewAnimationDialogue = true;
     UI::SetActive(textInputID);
 }
 
 void HideNewAnimationDialog()
 {
-    showDialogue = false;
+    showNewAnimationDialogue = false;
 }
 
 // This is a bit hackey
 bool RenderNewAnimationDialog(Application& app, const UI::Font& font, gn::darray<Animation>& list)
 {
-    if (!showDialogue)
+    if (!showNewAnimationDialogue)
         return false;
 
     bool result = false;
@@ -68,12 +69,13 @@ bool RenderNewAnimationDialog(Application& app, const UI::Font& font, gn::darray
 
     {   // Buttons
         Vector3 topLeft(rect.topLeft.x + hgap, height, 0.0f);
-        if (UI::RenderTextButton(app, GenUIID(), "Cancel", font, Vector2(10.0f, 5.0f), topLeft))
+        if (app.GetKeyDown(KEY(ESCAPE)) ||
+            UI::RenderTextButton(app, GenUIID(), "Cancel", font, Vector2(10.0f, 5.0f), topLeft))
         {
             std::stringstream ss;
             ss << "animation_" << numAnimations - 1;
             defaultName = ss.str();
-            showDialogue = false;
+            showNewAnimationDialogue = false;
         }
 
         std::string_view text = "Add";
@@ -93,11 +95,81 @@ bool RenderNewAnimationDialog(Application& app, const UI::Font& font, gn::darray
             numAnimations++;
 
             result = true;
-            showDialogue = false;
+            showNewAnimationDialogue = false;
         }
     }
     
     return result;
+}
+
+// This is a bit hackey
+void RenderRenameAnimationDialog(Application& app, const UI::Font& font, gn::darray<Animation>& list, int& selectedIndex)
+{
+    static bool copiedName = false;
+    static std::string tempName;
+
+    if (!copiedName)
+    {
+        tempName = list[selectedIndex].name;
+        copiedName = true;
+    }
+
+    constexpr f32 vgap = 10.0f;
+    constexpr f32 hgap = 10.0f;
+
+    const f32 totalWidth  = 325.0f;
+    const f32 totalHeight = 3.0f * font.fontHeight + 6.0f * vgap;
+
+    f32 height = vgap;
+    UI::Rect rect;
+
+    {   // Background
+        rect.topLeft = Vector3((app.refScreenWidth - totalWidth) / 2.0f, (app.refScreenHeight - totalHeight) / 2.0f, 0.0f);
+        rect.size = Vector2(totalWidth, totalHeight);
+        UI::RenderRect(app, rect, grey);
+
+        height += rect.topLeft.y;
+    }
+
+    {   // Header
+        std::string_view text = "Rename Animation";
+        Vector2 size = UI::GetRenderedTextSize(text, font);
+        Vector3 topLeft((app.refScreenWidth - size.x) / 2.0f, height, 0.0f);
+        UI::RenderText(app, text, font, white, topLeft);
+
+        height += size.y + vgap;
+    }
+
+    {   // Text Box
+        f32 width = totalWidth - 40.0f;
+        Vector3 topLeft((app.refScreenWidth - width) / 2.0f, height, 0.0f);
+        UI::RenderTextInput(app, textInputID, tempName, font, Vector2(10.0f, 5.0f), topLeft, width);
+
+        height += font.fontHeight + 20.0f + vgap;
+    }
+
+    {   // Buttons
+        Vector3 topLeft(rect.topLeft.x + hgap, height, 0.0f);
+        if (app.GetKeyDown(KEY(ESCAPE)) ||
+            UI::RenderTextButton(app, GenUIID(), "Cancel", font, Vector2(10.0f, 5.0f), topLeft))
+        {
+            showRenameAnimationDialogue = false;
+            copiedName = false;
+        }
+
+        std::string_view text = "Confirm";
+        Vector2 size = UI::GetRenderedTextSize(text, font);
+        topLeft.x = ((app.refScreenWidth + totalWidth) / 2.0f) - size.x - 20.0f - hgap;
+        if (app.GetKeyDown(KEY(ENTER)) || app.GetKeyDown(KEY(KP_ENTER)) ||
+            UI::RenderTextButton(app, GenUIID(), text, font, Vector2(10.0f, 5.0f), topLeft))
+        {
+            if (tempName.length() >= 0)
+                list[selectedIndex].name = tempName;
+
+            showRenameAnimationDialogue = false;
+            copiedName = false;
+        }
+    }
 }
 
 Vector2 RenderAnimationInfo(Application& app, const UI::Font& font, gn::darray<Animation>& animations, int& index, const Vector3& topLeft)
@@ -148,19 +220,32 @@ Vector2 RenderAnimationInfo(Application& app, const UI::Font& font, gn::darray<A
         height += size.y + vgap;
     }
 
+    f32 x = app.refScreenWidth - 10.0f;
+
     {   // Delete
         std::string_view text = "Delete";
         Vector2 size = UI::GetRenderedTextSize(text, font);
+        x -= size.x + 20.0f;
 
-        f32 maxX = app.refScreenWidth - topLeft.x;
-        f32 x = topLeft.x + ((maxX - size.x - 20.0f) / 2.0f) - 5.0f;
         if (UI::RenderTextButton(app, GenUIID(), text, font, Vector2(10.0f, 5.0f), Vector3(x, height, topLeft.z)))
         {
             animations.erase_at(index);
             index = -1;
         }
+    }
 
-        height += vgap;
+    {   // Rename
+        std::string_view text = "Rename";
+        Vector2 size = UI::GetRenderedTextSize(text, font);
+        x -= size.x + 20.0f;
+
+        if (UI::RenderTextButton(app, GenUIID(), text, font, Vector2(10.0f, 5.0f), Vector3(x, height, topLeft.z)))
+            showRenameAnimationDialogue = true;
+
+        if (showRenameAnimationDialogue)
+            RenderRenameAnimationDialog(app, font, animations, index);
+
+        height += 2.0f * vgap;
     }
 
     return Vector2 { 0.0f, height - topLeft.y };
