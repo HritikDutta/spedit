@@ -1,6 +1,7 @@
 #pragma once
 
 #include "hash_table.h"
+#include "math/basic_types.h"
 
 namespace gn
 {

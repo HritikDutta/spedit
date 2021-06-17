@@ -9,7 +9,7 @@
 #include "engine/ui.h"
 #include "platform/fileio.h"
 #include "animation.h"
-#include "json.h"
+#include "json/parser.h"
 
 constexpr char fileFormatStart[] =
 "{\n"
@@ -116,10 +116,16 @@ void OutputToJSONFile(const std::string& fullpath, const std::string& filename, 
 
 bool LoadFromJSONFile(const std::string& jsonfile, std::string& fullpath, std::string& filename, gn::darray<Animation>& animations, UI::Image& image, bool imageLoaded)
 {
-    JSON::Value sheet = JSON::LoadJSONFile(jsonfile);
+    std::string json = LoadFile(jsonfile);
 
-    std::string directory = sheet["directory"].GetString();
-    filename = sheet["file"].GetString();
+    json::Document document;
+    if (!json::ParseFile(json, document))
+        return false;
+
+    auto docObject = document.start().object();
+
+    std::string directory = docObject["directory"].string();
+    filename = docObject["file"].string();
     fullpath = directory + '\\' + filename;
 
     UI::Image temp;
@@ -130,15 +136,12 @@ bool LoadFromJSONFile(const std::string& jsonfile, std::string& fullpath, std::s
 
     image = temp;
 
-    JSON::Value& array = sheet["animations"];
-    for (int ai = 0; ai < array.GetArraySize(); ai++)
+    for (auto& animObject : docObject["animations"].array())
     {
-        JSON::Value& animData = array[ai];
-
-        std::string name = animData["name"].GetString();
+        auto& name = animObject["name"].string();
         Animation& animation = animations.emplace_back(name);
 
-        std::string loopTypeName = animData["loopType"].GetString();
+        auto& loopTypeName = animObject["loopType"].string();
         if (loopTypeName == "None")
             animation.loopType = Animation::LoopType::NONE;
         else if (loopTypeName == "Cycle")
@@ -146,24 +149,21 @@ bool LoadFromJSONFile(const std::string& jsonfile, std::string& fullpath, std::s
         else // if (loopTypeName == "Ping Pong")
             animation.loopType = Animation::LoopType::PING_PONG;
 
-        animation.frameRate = animData["frameRate"].GetFloat();
+        animation.frameRate = animObject["frameRate"].float64();
 
-        JSON::Value& frameArray = animData["frames"];
-        for (int fi = 0; fi < frameArray.GetArraySize(); fi++)
+        for (auto& frameObject : animObject["frames"].array())
         {
-            JSON::Value& frameData = frameArray[fi];
             AnimationFrame& frame = animation.frames.emplace_back();
 
-            frame.topLeft.x = frameData["x"].GetInt();
-            frame.topLeft.y = frameData["y"].GetInt();
-            frame.size.x = frameData["w"].GetInt();
-            frame.size.y = frameData["h"].GetInt();
+            frame.topLeft.x = frameObject["x"].int64();
+            frame.topLeft.y = frameObject["y"].int64();
+            frame.size.x = frameObject["w"].int64();
+            frame.size.y = frameObject["h"].int64();
 
-            frame.pivot.x = frameData["pivot_x"].GetFloat();
-            frame.pivot.y = frameData["pivot_y"].GetFloat();
+            frame.pivot.x = frameObject["pivot_x"].float64();
+            frame.pivot.y = frameObject["pivot_y"].float64();
         }
     }
 
-    sheet.Free();
     return true;
 }

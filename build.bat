@@ -29,6 +29,7 @@ cl %compile_flags% /c src/math/*.cpp %includes% & ^
 cl %compile_flags% /c src/engine/*.cpp %includes% & ^
 cl %compile_flags% /c src/platform/*.cpp %includes% & ^
 cl %compile_flags% /c src/program/*.cpp %includes% & ^
+cl %compile_flags% /c src/json/*.cpp %includes% & ^
 cl %compile_flags% /c src/main.cpp %includes% & ^
 
 rem Resources

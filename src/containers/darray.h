@@ -1,14 +1,11 @@
 #pragma once
 
+#include <cstdlib>
+#include <initializer_list>
 #include "misc/gn_assert.h"
 
 #define DARRAY_START_CAPACITY   2
 #define DARRAY_GROWTH_RATE      1.5
-
-// Functions used
-void* realloc(void*, size_t);
-void* memcpy(void*, const void*, size_t);
-void  free(void*);
 
 namespace gn {
 
@@ -16,12 +13,21 @@ template<typename T>
 class darray
 {
 public:
+    using iterator = T*;
 
     size_t size()     const { return _size; }
     size_t capacity() const { return _capacity; }
 
     const T* data() const { return buffer; };
           T* data()       { return buffer; };
+
+    void init(size_t capacity = DARRAY_START_CAPACITY)
+    {
+        _size = 0;
+        _capacity = capacity;
+        buffer = nullptr;
+        reallocate(capacity);
+    }
 
     // Only capacity is increased
     void reserve(size_t capacity)
@@ -128,11 +134,8 @@ public:
 
     // Iterators and C++11 stuff
 
-    const T* begin() const { return buffer; }
-          T* begin()       { return buffer; }
-
-    const T* end() const { return buffer + _size; }
-          T* end()       { return buffer + _size; }
+    iterator begin() const { return buffer; }
+    iterator end()   const { return buffer + _size; }
 
     // Constructors and Destructors
 
@@ -143,12 +146,13 @@ public:
         reallocate(capacity);
     }
 
-    darray(const std::initializer_list<T>& values)
+    darray(std::initializer_list<T> values)
     :   _size(0), _capacity(values.size()),
         buffer(nullptr)
     {
+        reallocate(values.size());
         for (auto&& val : values)
-            buffer[_size++] = std::move(values);
+            buffer[_size++] = std::move(val);
     }
 
     darray(const darray& other)

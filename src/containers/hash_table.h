@@ -1,554 +1,368 @@
 #pragma once
 
-#include "math/types.h"
 #include "misc/gn_assert.h"
 
-#define HASHTABLE_START_CAPACITY   32
-#define HASHTABLE_GROWTH_RATE      2.0
-#define HASHTABLE_LOAD_FACTOR      0.7
+#define HASH_TABLE_MAX_LOAD_FACTOR 0.8
+#define HASH_TABLE_GROWTH_RATE     2.0
 
-#define min(a, b) ((a < b) ? a : b)
-#define max(a, b) ((a > b) ? a : b)
+namespace gn {
 
-// Functions used
-void* malloc(size_t _Size);
-void* calloc(size_t _Count, size_t _Size);
-void* memcpy(void *_Dst, const void *_Src, size_t _Size);
-
-namespace gn
-{
+using hash_t = size_t;
 
 template <typename T>
 struct hash
 {
-    size_t operator()(const T& key);
+    hash_t operator()(T const& key) const;
 };
 
-template <typename key_type, typename value_type, typename hasher = hash<key_type>>
+template <typename key_t, typename value_t, typename hasher = hash<key_t>>
 class hash_table
 {
 public:
-    struct pair
+    struct pair_t
     {
-        key_type   key;
-        value_type value;
+        key_t   key;
+        value_t value;
+    };
 
-        pair() {};
+    enum class state_t
+    {
+        EMPTY,
+        TOMBSTONE,
+        ACTIVE
+    };
 
-        pair(const key_type& key, const value_type& value)
-        :   key(key), value(value) {}
-
-        pair(key_type&& key, value_type&& value)
-        :   key(std::move(key)), value(std::move(value)) {}
-
-        pair(const pair& other)
-        :   key(other.key), value(other.value) {}
-
-        pair(pair&& other)
-        :   key(std::move(other.key)), value(std::move(other.value)) {}
+    struct slot_t
+    {
+        state_t state;
+        hash_t  hash;
+        pair_t  pair;
     };
 
     struct iterator
     {
-        const hash_table& table;
-        pair* ptr;
+        const hash_table* table;
+        size_t index;
 
-        iterator() {};
-
-        iterator(const hash_table& table, pair* ptr)
-        :   table(table), ptr(ptr) {};
+        iterator(const hash_table* table, size_t index)
+        :   table(table), index(index) {}
 
         iterator(const iterator& other)
-        :   table(other.table), ptr(other.ptr) {}
+        :   table(other.table), index(other.index) {}
 
         void advance()
         {
-            while (ptr < table.last + 1)
-            {
-                ptr++;
+            if (index > table->_last)
+                return;
 
-                if (table.is_active(table.active_pairs, (size_t)(ptr - table.first)))
-                    break;
-            }
+            index++;
 
-            ptr = min(ptr, table.last + 1);
+            while (table->_table[index].state != state_t::ACTIVE &&
+                   index <= table->_last)
+            { index++; }
         }
 
-        void retreat()
-        {
-            while (ptr > table.first)
-            {
-                ptr--;
-
-                if (table.is_active(table.active_pairs, (size_t)(ptr - table.first)))
-                    break;
-            }
-
-            ptr = max(ptr, table.first);
-        }
-
-        iterator& operator++()
+        iterator& operator++(int)
         {
             advance();
             return *this;
         }
 
-        iterator operator++(int)
+        iterator operator++()
         {
             iterator it = *this;
             advance();
             return it;
         }
 
-        iterator& operator--()
+        const pair_t& operator*() const
         {
-            retreat();
-            return *this;
+            return table->_table[index].pair;
         }
 
-        iterator operator--(int)
+        pair_t& operator*()
         {
-            iterator it = *this;
-            retreat();
-            return it;
+            return table->_table[index].pair;
         }
-
-        const pair& operator*() const
-        {
-            return *ptr;
-        }
-
-        pair& operator*()
-        {
-            return *ptr;
-        }
-
-        const pair* operator->() const
-        {
-            return ptr;
-        }
-
-        pair* operator->()
-        {
-            return ptr;
-        }
-
+        
         bool operator==(const iterator& other) const
         {
-            return ptr == other.ptr;
+            return table == other.table &&
+                   index == other.index;
         }
 
         bool operator!=(const iterator& other) const
         {
-            return ptr != other.ptr;
+            return table != other.table ||
+                   index != other.index;
         }
     };
 
-public:
+    size_t size() const { return _size; }
+    size_t capacity() const { return _capacity; }
 
-    size_t filled() const { return active_count; }
-    size_t capacity() const { return cap; }
-
-    bool is_empty() const { return active_count == 0; }
+    iterator begin() const { return iterator(this, _first); }
+    iterator end() const { return iterator(this, _last + 1); }
 
     void resize(size_t new_cap)
     {
-        if (new_cap == cap)
-            return;
+        slot_t* prev_table = _table;
+        size_t prev_cap = _capacity;
 
-        pair* new_pairs = (pair*) malloc(new_cap * sizeof(pair));
-        pair* new_first = new_pairs + new_cap;
-        pair* new_last  = new_pairs - 1;
+        _capacity = new_cap;
+        _table = allocate_slots(_capacity);
 
-        size_t new_active_pair_buckets = ((new_cap / 64) + 1);
-        u64* new_active_pairs = (u64*) calloc(new_active_pair_buckets, sizeof(u64));
+        _first = new_cap;
+        _last = 0;
 
-        // rehash the table
-        for (size_t i = 0; i < cap; i += 64)
+        size_t move_count = 0;
+        for (size_t idx = 0; move_count < _size && idx < prev_cap; idx++)
         {
-            if (active_pairs[i / 64] == 0)
+            if (prev_table[idx].state != state_t::ACTIVE)
                 continue;
 
-            size_t limit = min(i + 64, cap);
-            for (size_t j = i; j < limit; j++)
+            key_t& key = prev_table[idx].pair.key;
+            hash_t h = prev_table[idx].hash;
+
+            size_t probe_start = h % _capacity;
+            size_t probe_end = (probe_start + _capacity - 1) % _capacity;
+
+            for (size_t i = probe_start; i != probe_end; i = (i + 1) % _capacity)
             {
-                if (is_active(active_pairs, j))
-                {
-                    // move key and value to new_pairs
-                    size_t start_idx = hash(pairs[j].key) % new_cap;
-                    size_t last_idx  = (start_idx == 0) ? new_cap - 1: start_idx - 1;
+                if (_table[i].state == state_t::ACTIVE)
+                    continue;
 
-                    for (size_t k = start_idx; k != last_idx; k = (k + 1) % new_cap)
-                    {
-                        if (is_active(new_active_pairs, k))
-                            continue;
+                _first = std::min(_first, i);
+                _last = std::max(_last, i);
 
-                        new_first = min(new_pairs + k, new_first);
-                        new_last  = max(new_pairs + k, new_last);
-
-                        set_active(new_active_pairs, k, true);
-
-                        memcpy(new_pairs + k, pairs + j, sizeof(pair));
-                        break;
-                    }
-                }
+                // Use memcpy here
+                memcpy(&_table[i], &prev_table[idx], sizeof(slot_t));
+                move_count++;
+                break;
             }
         }
 
-        // delete the previous array
-        free(pairs);
-        free(active_pairs);
-
-        // update details
-        pairs = new_pairs;
-        first = new_first;
-        last  = new_last;
-
-        active_pairs = new_active_pairs;
-        active_pair_buckets = new_active_pair_buckets;
-
-        cap = new_cap;
+        free(prev_table);
     }
 
     void clear()
     {
-        for (size_t i = 0; i < cap; i++)
+        for (size_t i = 0; _size > 0 && i < _capacity; i++)
         {
-            if (active_pairs[i / 64] == 0)
+            if (_table[i].state == state_t::ACTIVE)
             {
-                i += 64;
-                continue;
-            }
+                _table[i].pair.key.~key_t();
+                _table[i].pair.value.~value_t();
 
-            if (is_active(active_pairs, i))
-            {
-                set_active(active_pairs, i, false);
-                pairs[i].~pair();
+                _table[i].state = state_t::TOMBSTONE;
+                _size--;
             }
         }
+    }
+
+    template<typename... Args>
+    value_t& emplace(const key_t& key, const Args&&... args)
+    {
+        if (load_factor() >= HASH_TABLE_MAX_LOAD_FACTOR)
+            resize(_capacity * HASH_TABLE_GROWTH_RATE);
         
-        active_count = 0;
-    }
+        hash_t h = hash(key);
 
-    void put(const key_type& key, const value_type& value)
-    {
-        if (((double) active_count / (double) cap) >= HASHTABLE_LOAD_FACTOR)
-            resize(cap * HASHTABLE_GROWTH_RATE);
+        size_t probe_start = h % _capacity;
+        size_t probe_end = (probe_start + _capacity - 1) % _capacity;
 
-        size_t start_idx = hash(key) % cap;
-        size_t last_idx  = (start_idx == 0) ? cap - 1: start_idx - 1;
-
-        for (size_t i = start_idx; i != last_idx; i = (i + 1) % cap)
+        for (size_t i = probe_start; i != probe_end; i = (i + 1) % _capacity)
         {
-            if (is_active(active_pairs, i))
-            {
-                if (pairs[i].key != key)
-                    continue;
-            }
-            else
-            {
-                first = min(pairs + i, first);
-                last  = max(pairs + i, last);
+            if (_table[i].state == state_t::ACTIVE)
+                break;
 
-                set_active(active_pairs, i, true);
+            _first = std::min(_first, i);
+            _last = std::max(_last, i);
 
-                // Construct key
-                new(&pairs[i].key)   key_type(key);
-                new(&pairs[i].value) value_type();
-                active_count++;
-            }
+            // Fill slot if it's empty or a tombstone
 
-            pairs[i].value = value;
-            return;
+            new(&_table[i].pair.key)   key_t(key);
+            new(&_table[i].pair.value) value_t(std::forward<Args>(args)...);
+
+            _table[i].hash  = h;
+            _table[i].state = state_t::ACTIVE;
+            _size++;
+
+            return _table[i].pair.value;
         }
 
-        ASSERT_NOT_VALID("hash_table::put() shouldn't reach this point");
+        ASSERT_NOT_VALID("hash_table::emplace() ran out of slots");
+        return _table[_capacity].pair.value;
     }
 
-    void put(const key_type& key, value_type&& value)
+    void erase(const key_t& key)
     {
-        if (((double) active_count / (double) cap) >= HASHTABLE_LOAD_FACTOR)
-            resize(cap * HASHTABLE_GROWTH_RATE);
+        hash_t h = hash(key);
 
-        size_t start_idx = hash(key) % cap;
-        size_t last_idx  = (start_idx == 0) ? cap - 1: start_idx - 1;
+        size_t probe_start = h % _capacity;
+        size_t probe_end = (probe_start + _capacity - 1) % _capacity;
 
-        for (size_t i = start_idx; i != last_idx; i = (i + 1) % cap)
+        for (size_t i = probe_start; i != probe_end; i = (i + 1) % _capacity)
         {
-            if (is_active(active_pairs, i))
-            {
-                if (pairs[i].key != key)
-                    continue;
-            }
-            else
-            {
-                first = min(pairs + i, first);
-                last  = max(pairs + i, last);
-
-                set_active(active_pairs, i, true);
-
-                new(&pairs[i].key)   key_type(key);
-                new(&pairs[i].value) value_type();
-                active_count++;
-            }
-
-            pairs[i].value = std::move(value);
-            return;
-        }
-
-        ASSERT_NOT_VALID("hash_table::put() shouldn't reach this point");
-        return pairs[cap].value;
-    }
-
-    iterator find(const key_type& key)
-    {
-        size_t start_idx = hash(key) % cap;
-        size_t last_idx  = (start_idx == 0) ? cap - 1: start_idx - 1;
-        for (size_t i = start_idx; i != last_idx; i = (i + 1) % cap)
-        {
-            if (active_pairs[i / 64] == 0)
+            if (_table[i].state == state_t::EMPTY)
                 break;
             
-            if (!is_active(active_pairs, i))
-                break;
+            if (_table[i].state == state_t::TOMBSTONE ||
+                _table[i].hash != h)
+                continue;
+            
+            _table[i].pair.key.~key_t();
+            _table[i].pair.value.~value_t();
 
-            if (pairs[i].key == key)
-                return iterator(*this, pairs + i);
+            size_t next_idx = (i + 1) % _capacity;
+            _table[i].state = (_table[next_idx].state == state_t::EMPTY) ? state_t::EMPTY : state_t::TOMBSTONE;
+            _size--;
+
+            break;
+        }
+    }
+
+    value_t& at(const key_t& key)
+    {
+        if (load_factor() >= HASH_TABLE_MAX_LOAD_FACTOR)
+            resize(_capacity * HASH_TABLE_GROWTH_RATE);
+        
+        hash_t h = hash(key);
+
+        size_t probe_start = h % _capacity;
+        size_t probe_end = (probe_start + _capacity - 1) % _capacity;
+
+        for (size_t i = probe_start; i != probe_end; i = (i + 1) % _capacity)
+        {
+            if (_table[i].state == state_t::TOMBSTONE)
+                continue;
+
+            if (_table[i].state == state_t::ACTIVE)
+            {
+                if (_table[i].hash != h)
+                    continue;
+                
+                return _table[i].pair.value;
+            }
+
+            // Encountered an empty element
+
+            _first = std::min(_first, i);
+            _last = std::max(_last, i);
+
+            new(&_table[i].pair.key)   key_t(key);
+            new(&_table[i].pair.value) value_t();
+
+            _table[i].hash  = h;
+            _table[i].state = state_t::ACTIVE;
+            _size++;
+
+            return _table[i].pair.value;
+        }
+
+        ASSERT_NOT_VALID("hash_table::at() ran out of slots");
+        return _table[_capacity].pair.value;
+    }
+
+    iterator find(const key_t& key) const
+    {
+        hash_t h = hash(key);
+
+        size_t probe_start = h % _capacity;
+        size_t probe_end = (probe_start + _capacity - 1) % _capacity;
+
+        for (size_t i = probe_start; i != probe_end; i = (i + 1) % _capacity)
+        {
+            if (_table[i].state == state_t::TOMBSTONE)
+                continue;
+
+            if (_table[i].state == state_t::ACTIVE)
+            {
+                if (_table[i].hash != h)
+                    continue;
+                
+                return iterator(this, i);
+            }
         }
 
         return end();
     }
 
-    const value_type& get(const key_type& key) const
+    const value_t& at(const key_t& key) const
     {
-        size_t start_idx = hash(key) % cap;
-        size_t last_idx  = (start_idx == 0) ? cap - 1: start_idx - 1;
-        for (size_t i = start_idx; i != last_idx; i = (i + 1) % cap)
+        hash_t h = hash(key);
+
+        size_t probe_start = h % _capacity;
+        size_t probe_end = (probe_start + _capacity - 1) % _capacity;
+
+        for (size_t i = probe_start; i != probe_end; i = (i + 1) % _capacity)
         {
-            if (active_pairs[i / 64] == 0)
-                break;
-            
-            if (!is_active(active_pairs, i))
-                break;
-
-            if (pairs[i].key == key)
-                return pairs[i].value;
-        }
-
-        ASSERT_NOT_VALID("hash_table::get() can only be used for keys that have already been inserted");
-        return pairs[cap].value;
-    }
-
-    value_type& get(const key_type& key)
-    {
-        size_t start_idx = hash(key) % cap;
-        size_t last_idx  = (start_idx == 0) ? cap - 1: start_idx - 1;
-        for (size_t i = start_idx; i != last_idx; i = (i + 1) % cap)
-        {
-            if (active_pairs[i / 64] == 0)
-                break;
-            
-            if (!is_active(active_pairs, i))
-                break;
-
-            if (pairs[i].key == key)
-                return pairs[i].value;
-        }
-
-        ASSERT_NOT_VALID("hash_table::get() can only be used for keys that have already been inserted");
-        return pairs[cap].value;
-    }
-
-    const value_type& at(const key_type& key) const
-    {
-        if (((double) active_count / (double) cap) >= HASHTABLE_LOAD_FACTOR)
-            resize(cap * HASHTABLE_GROWTH_RATE);
-
-        size_t start_idx = hash(key) % cap;
-        size_t last_idx  = (start_idx == 0) ? cap - 1: start_idx - 1;
-
-        for (size_t i = start_idx; i != last_idx; i = (i + 1) % cap)
-        {
-            if (active_pairs[i / 64] == 0 ||
-                !is_active(active_pairs, i))
-            {
-                first = min(pairs + i, first);
-                last  = max(pairs + i, last);
-
-                set_active(active_pairs, i, true);
-
-                new(&pairs[i].key)   key_type(key);
-                new(&pairs[i].value) value_type();
-                active_count++;
-
-                return pairs[i].value;
-            }
-
-            if (pairs[i].key == key)
-                return pairs[i].value;
-        }
-
-        ASSERT_NOT_VALID("hash_table::at() shouldn't reach this point");
-        return pairs[cap].value;
-    }
-
-    value_type& at(const key_type& key)
-    {
-        if (((double) active_count / (double) cap) >= HASHTABLE_LOAD_FACTOR)
-            resize(cap * HASHTABLE_GROWTH_RATE);
-
-        size_t start_idx = hash(key) % cap;
-        size_t last_idx  = (start_idx == 0) ? cap - 1: start_idx - 1;
-
-        size_t i;
-
-        for (i = start_idx; i != last_idx; i = (i + 1) % cap)
-        {
-            if (active_pairs[i / 64] == 0 ||
-                !is_active(active_pairs, i))
-            {
-                first = min(pairs + i, first);
-                last  = max(pairs + i, last);
-
-                set_active(active_pairs, i, true);
-
-                new(&pairs[i].key)   key_type(key);
-                new(&pairs[i].value) value_type();
-                active_count++;
-
-                return pairs[i].value;
-            }
-
-            if (pairs[i].key == key)
-                return pairs[i].value;
-        }
-
-        ASSERT_NOT_VALID("hash_table::at() shouldn't reach this point");
-        return pairs[cap].value;
-    }
-
-    // Iterators and C++11 stuff
-
-    iterator begin() const
-    {
-        iterator it(*this, first);
-        return it;
-    }
-
-    iterator end() const
-    {
-        iterator it(*this, last + 1);
-        return it;
-    }
-
-    // Constructors and `
-
-    hash_table()
-    :   active_count(0), cap(HASHTABLE_START_CAPACITY),
-        active_pair_buckets((HASHTABLE_START_CAPACITY / 64) + 1)
-    {
-        pairs = (pair*) malloc(HASHTABLE_START_CAPACITY * sizeof(pair));
-        active_pairs = (u64*) calloc(active_pair_buckets, sizeof(u64));
-
-        first = pairs + cap;
-        last  = pairs - 1;
-    }
-
-    hash_table(const hash_table& other)
-    :   active_count(other.active_count), cap(other.cap),
-        active_pair_buckets(other.active_pair_buckets),
-        first(other.first), last(other.last)
-    {
-        pairs = (pair*) malloc(HASHTABLE_START_CAPACITY * sizeof(pair));
-        active_pairs = (u64*) malloc(active_pair_buckets, sizeof(u64));
-        memset(active_pairs, other.active_pairs, active_pair_buckets * sizeof(u64));
-
-        for (size_t i = 0; i < cap; i++)
-        {
-            if (other.active_pairs[i / 64] == 0)
-            {
-                i += 64;
+            if (_table[i].state == state_t::TOMBSTONE)
                 continue;
-            }
 
-            if (is_active(other.active_pairs, i))
+            if (_table[i].state == state_t::ACTIVE)
             {
-                new(&pairs[i].key)   key_type(others[i].key);
-                new(&pairs[i].value) value_type(others[i].value);
+                if (_table[i].hash != h)
+                    continue;
+                
+                return _table[i].pair.value;
             }
         }
+
+        return _table[_last + 1].pair.value;
     }
 
-    hash_table(hash_table&& other)
-    :   active_count(other.active_count), cap(other.cap),
-        active_pair_buckets(other.active_pair_buckets),
-        pairs(other.pairs), active_pairs(other.active_pairs),
-        first(other.first), last(other.last)
+    value_t& operator[](const key_t& key)
     {
-        other.active_pairs = nullptr;
-        other.pairs = other.first = other.last = nullptr;
+        return at(key);
+    }
 
-        other.cap = other.active_pair_buckets = other.active_count = 0;
+    const value_t& operator[](const key_t& key) const
+    {
+        return at(key);
+    }
+
+    void init(size_t start_capacity = 8)
+    {
+        _last = _size = 0;
+        _first = _capacity = start_capacity;
+        _table = allocate_slots(_capacity);
+    }
+
+    // Constructors and Destructors
+
+    hash_table(size_t start_capacity = 8)
+    :   _size(0), _capacity(start_capacity),
+        _first(start_capacity), _last(0)
+    {
+        _table = allocate_slots(_capacity);
     }
 
     ~hash_table()
     {
         clear();
-
-        free(active_pairs);
-        free(pairs);
-    }
-
-    // Operators
-
-    const value_type& operator[](const key_type& key) const
-    {
-        return at(key);
-    }
-
-    value_type& operator[](const key_type& key)
-    {
-        return at(key);
+        free(_table);
     }
 
 private:
 
-    bool is_active(u64* bits, size_t index) const
+    double load_factor() const { return (double) _size / (double) _capacity; }
+
+    static slot_t* allocate_slots(size_t count)
     {
-        size_t big_idx   = index / 64;
-        size_t small_idx = index % 64;
-        bool res = bits[big_idx] & (1Ui64 << small_idx);
-        return res;
+        slot_t* slots = (slot_t*) malloc(count * sizeof(slot_t));
+        for (size_t i = 0; i < count; i++)
+            slots[i].state = state_t::EMPTY;
+        return slots;
     }
 
-    void set_active(u64* bits, size_t index, bool active)
-    {
-        size_t big_idx   = index / 64;
-        size_t small_idx = index % 64;
-
-        if (active)
-            bits[big_idx] |= (1Ui64 << small_idx);
-        else
-            bits[big_idx] &= ~(1Ui64 << small_idx);
-    }
-
-    // A bitfield to keep track of occupied pairs
-    u64* active_pairs { nullptr };
-    size_t active_pair_buckets { 0 };
-
-    pair* pairs;
-    size_t active_count, cap;
-
-    pair* first;
-    pair* last;
-
+private:
+    slot_t* _table;
+    size_t _size, _capacity;
     hasher hash;
 
-    friend struct iterator;
+    size_t _first, _last;
 };
-
-#undef min
-#undef max
 
 } // namespace gn
 

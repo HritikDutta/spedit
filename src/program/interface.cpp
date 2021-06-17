@@ -311,6 +311,8 @@ void RenderFrameInfo(Application& app, const UI::Font& font, gn::darray<Animatio
         Vector3 inputPos(x + size.x, y - 5.0f, 0.0f);
         UI::RenderNumericInputi(app, GenUIID(), num, text, font, Vector2(10.0f, 5.0f), inputPos, numericInputWidth);
 
+
+        
         frame.topLeft.y = num;
 
         x += size.x + numericInputWidth + hgap;
