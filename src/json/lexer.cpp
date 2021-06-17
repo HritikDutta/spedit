@@ -1,9 +1,5 @@
 #include "lexer.h"
 
-#ifdef DEBUG
-#include <iostream>
-#endif
-
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -128,18 +124,6 @@ static inline std::string_view GetIdentifierToken(Lexer& lexer, const std::strin
     return content_view.substr(start, lexer.current_index - start);
 }
 
-#ifdef DEBUG
-static void DebugOutput(const Lexer& lexer)
-{
-    std::cout << "LEXER OUTPUT\n";
-    for (auto token : lexer.tokens)
-    {
-        std::cout << token.value << '\n';
-    }
-    std::cout << "\n";
-}
-#endif
-
 void Lexer::Lex()
 {
     current_index = 0;
@@ -199,11 +183,6 @@ void Lexer::Lex()
             } break;
         }
     }
-
-#   ifdef DEBUG
-    // if (errorCode == 0)
-        // DebugOutput(*this);
-#   endif
 }
 
 const char* Lexer::GetErrorMessage() const

@@ -1,9 +1,5 @@
 #include "parser.h"
 
-#ifdef DEBUG
-#include <iostream>
-#endif
-
 #include <string>
 #include <string_view>
 #include "containers/darray.h"
@@ -14,93 +10,6 @@
 
 namespace json
 {
-
-#ifdef DEBUG
-static size_t PrintNodeInfo(const Document& document, size_t nodeIndex, std::string& tabs)
-{
-    auto& node = document.dependencyTree[nodeIndex];
-
-    size_t offset = 1;
-
-    switch (node.type)
-    {
-        case DependencyNode::Type::DIRECT:
-        {
-            auto& resource = document.resources[node._index];
-            switch (resource.type)
-            {
-                case Resource::Type::STRING:
-                std::cout << tabs << resource._string << '\n';
-                break;
-
-                case Resource::Type::INTEGER:
-                std::cout << tabs << resource._integer << '\n';
-                break;
-
-                case Resource::Type::FLOAT:
-                std::cout << tabs << resource._float << '\n';
-                break;
-                
-                case Resource::Type::BOOLEAN:
-                std::cout << tabs << resource._boolean << '\n';
-                break;
-
-                case Resource::Type::NONE:
-                std::cout << tabs << "null\n";
-                break;
-            }
-        } break;
-
-        case DependencyNode::Type::ARRAY:
-        {
-            std::cout << tabs << "Array Start::\n";
-            
-            tabs.append("  - ");
-            for (size_t index : node._array)
-                offset += PrintNodeInfo(document, index, tabs);
-            tabs.pop_back();
-            tabs.pop_back();
-            tabs.pop_back();
-            tabs.pop_back();
-
-            std::cout << tabs << "Array End::\n";
-        } break;
-
-        case DependencyNode::Type::OBJECT:
-        {
-            std::cout << tabs << "Object Start::\n";
-            
-            tabs.append("    ");
-            std::string tabsForChildren = tabs + " -> ";
-            for (auto& pair : node._object)
-            {
-                std::cout << tabs << pair.key << ":\n";
-                offset += PrintNodeInfo(document, pair.value, tabsForChildren);
-            }
-
-            tabs.pop_back();
-            tabs.pop_back();
-            tabs.pop_back();
-            tabs.pop_back();
-
-            std::cout << tabs << "Object End::\n";
-        } break;
-    }
-
-    return offset;
-}
-
-static void DebugOutput(const Document& document)
-{
-    std::cout << "PARSER OUTPUT" << std::endl;
-    std::string tabs = "";
-
-    for (size_t index = 0; index < document.dependencyTree.size(); index++)
-    {
-        index += PrintNodeInfo(document, index, tabs);
-    }
-}
-#endif
 
 static String EscapeToken(Parser& parser, const Token& token)
 {
@@ -392,11 +301,6 @@ void Parser::ParseLexedOuput(const Lexer& lexer, Document& out)
             errorCode = 10;
         }
     }
-
-#   ifdef DEBUG
-    // if (errorCode == 0)
-        // DebugOutput(out);
-#   endif
 }
 
 const char* Parser::GetErrorMessage() const
