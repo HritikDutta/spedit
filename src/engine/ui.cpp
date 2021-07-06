@@ -4,6 +4,7 @@
 #include <iostream>
 #endif
 
+#include <algorithm>
 #include <string_view>
 #include <stb/stb_truetype.h>
 #include <stb/stb_image.h>
@@ -40,7 +41,28 @@ static struct
     u32 nextActiveTexSlot;  // Should always be lower than max allowed fonts
 
     ID hot, active;
+
+    u32 whiteTextureID;
 } uiData;
+
+static void InitWhiteTexture(int width, int height)
+{
+    u8* pixels = (u8*) malloc(width * height * 4);
+    memset(pixels, 0xFFFFFFFF, width * height * 4);
+
+    glGenTextures(1, &uiData.whiteTextureID);
+    glBindTexture(GL_TEXTURE_2D, uiData.whiteTextureID);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    free(pixels);
+}
 
 void Init()
 {
@@ -87,6 +109,8 @@ void Init()
     uiData.nextActiveTexSlot = 0;
 
     uiData.hot = uiData.active = UIInvalid();
+
+    InitWhiteTexture(32, 32);
 }
 
 void Begin()
@@ -129,6 +153,7 @@ void End()
 
 void Shutdown()
 {
+    glDeleteTextures(1, &uiData.whiteTextureID);
     delete[] uiData.quadVerticesBuffer;
 }
 
@@ -247,44 +272,6 @@ void SetActive(ID id)
     uiData.active = id;
 }
 
-static void AddColouredQuad(Application& app, const Rect& rect, Vector4 color)
-{
-    if (uiData.batchQuadCount >= maxQuadCount)
-    {
-        End();
-        Begin();
-    }
-
-    f32 top    = 1.0f - 2.0f * (rect.topLeft.y / app.refScreenHeight);
-    f32 left   = 2.0f * (rect.topLeft.x / app.refScreenWidth) - 1.0f;
-    f32 right  = 2.0f * ((rect.topLeft.x + rect.size.x) / app.refScreenWidth) - 1.0f;
-    f32 bottom = 1.0f - 2.0f * ((rect.topLeft.y + rect.size.y) / app.refScreenHeight);
-
-    f32 z = rect.topLeft.z;
-
-    uiData.quadVerticesPtr->position = Vector3(left, bottom, z);
-    uiData.quadVerticesPtr->color = color;
-    uiData.quadVerticesPtr->texIndex = -1.0f;
-    uiData.quadVerticesPtr++;
-
-    uiData.quadVerticesPtr->position = Vector3(right, bottom, z);
-    uiData.quadVerticesPtr->color = color;
-    uiData.quadVerticesPtr->texIndex = -1.0f;
-    uiData.quadVerticesPtr++;
-
-    uiData.quadVerticesPtr->position = Vector3(right, top, z);
-    uiData.quadVerticesPtr->color = color;
-    uiData.quadVerticesPtr->texIndex = -1.0f;
-    uiData.quadVerticesPtr++;
-
-    uiData.quadVerticesPtr->position = Vector3(left, top, z);
-    uiData.quadVerticesPtr->color = color;
-    uiData.quadVerticesPtr->texIndex = -1.0f;
-    uiData.quadVerticesPtr++;
-
-    uiData.batchQuadCount++;
-}
-
 static void AddTexturedQuad(Application& app, const Rect& rect, Vector4 texCoords, u32 texID, Vector4 color)
 {
     if (uiData.batchQuadCount >= maxQuadCount)
@@ -350,6 +337,12 @@ static void AddTexturedQuad(Application& app, const Rect& rect, Vector4 texCoord
     uiData.quadVerticesPtr++;
 
     uiData.batchQuadCount++;
+}
+
+static inline void AddColouredQuad(Application& app, const Rect& rect, Vector4 color)
+{
+    Vector4 texCoords { 0.0f, 0.0f, 1.0f, 1.0f };
+    AddTexturedQuad(app, rect, texCoords, uiData.whiteTextureID, color);
 }
 
 Vector2 GetRenderedTextSize(const std::string_view& text, const Font& font)

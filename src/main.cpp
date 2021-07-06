@@ -2,6 +2,7 @@
 #include <iostream>
 #endif
 
+#include <algorithm>
 #include <string_view>
 #include <cstring>
 
@@ -45,12 +46,13 @@ inline bool MouseInRect(Application& app, f32 x, f32 y, f32 w, f32 h)
 int main()
 {
 #   ifdef DEBUG
-
     Application app("Spedit-Debug", 1028, 720, false);
     app.SetVsync(false);
 #   else
-    Application app("Spedit", 1920, 1080, false);
-    app.SetMaximize(true);
+    Application app("Spedit-Debug", 1028, 720, false);
+    // Application app("Spedit", 1920, 1080, false);
+    // app.SetMaximize(true);
+    app.SetVsync(true);
 #   endif
 
     app.SetClearColor(Vector4(0.15f, 0.15f, 0.15f, 1.0f));
@@ -206,14 +208,15 @@ int main()
             if (UI::RenderTextButton(app, GenUIID(), "Open", font, { 10.0f, 5.0f }, { 10.0f, height + 30.0f, 0.0f }))
             {
                 std::string newpath = std::move(OpenFileDialog());
+                bool newImageLoaded = !newpath.empty();
 
-                if (!newpath.empty())
+                if (newImageLoaded)
                 {
                     // Should use string_view but welp
                     std::string extension = newpath.substr(newpath.find_last_of('.'));
 
                     if (extension == ".json")
-                        imageLoadError = !LoadFromJSONFile(newpath, fullpath, filename, animations, image, imageLoaded);
+                        imageLoadError = !LoadFromJSONFile(newpath, fullpath, filename, animations, image, newImageLoaded);
                     else
                     {
                         ResetAnimations(animations);
@@ -228,45 +231,47 @@ int main()
 
                         if (!imageLoadError)
                         {
-                            if (imageLoaded)
+                            if (newImageLoaded)
                                 image.Free();
 
                             image = temp;
                         }
                     }
-                }
+
+                    imageLoaded = imageLoaded || newImageLoaded;
                 
-                if (!imageLoadError)
-                {
-                    selectedFrameIndex = selectedAnimationIndex = -1;
+                    if (!imageLoadError)
+                    {
+                        selectedFrameIndex = selectedAnimationIndex = -1;
 
-                    bg.Free();
+                        bg.Free();
 
-                    scale = 3.0f;
-                    image.SetScale(scale);
+                        scale = 3.0f;
+                        image.SetScale(scale);
 
-                    bg.Create(image.width, image.height);
-                    bg.SetScale(scale);
+                        bg.Create(image.width, image.height);
+                        bg.SetScale(scale);
 
-                    imagePosition.x = (app.refScreenWidth -  image.scaledWidth)  / 2.0f;
-                    imagePosition.y = (app.refScreenHeight - image.scaledHeight) / 2.0f;
+                        imagePosition.x = (app.refScreenWidth -  image.scaledWidth)  / 2.0f;
+                        imagePosition.y = (app.refScreenHeight - image.scaledHeight) / 2.0f;
 
-                    size_t start = fullpath.find_last_of('\\');
-                    filename = fullpath.substr(start + 1);
-                    imageLoaded = true;
+                        size_t start = fullpath.find_last_of('\\');
+                        filename = fullpath.substr(start + 1);
 
-#                   ifdef DEBUG
-                    std::string windowName = "Spedit-Debug : ";
-#                   else
-                    std::string windowName = "Spedit : ";
-#                   endif
+    #                   ifdef DEBUG
+                        std::string windowName = "Spedit-Debug : ";
+    #                   else
+                        std::string windowName = "Spedit : ";
+    #                   endif
 
-                    windowName += filename;
-                    app.SetWindowTitle(windowName.c_str());
+                        windowName += filename;
+                        app.SetWindowTitle(windowName.c_str());
 
-#                   ifdef DEBUG
-                    std::cout << "Opening File: " << filename << std::endl;
-#                   endif
+    #                   ifdef DEBUG
+                        std::cout << "Opening File: " << filename << std::endl;
+    #                   endif
+                    }
+
                 }
             }
 

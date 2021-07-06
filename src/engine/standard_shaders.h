@@ -36,11 +36,7 @@ constexpr char uiQuadFragShader[] =
 
 "void main()\n"
 "{\n"
-"    color = v_color;\n"
-
-"    int index = int(v_texIndex);\n"
-"    if (index >= 0)\n"
-"        color *= texture(u_texs[index], v_texCoord);\n"
+"    color = v_color * texture(u_texs[int(v_texIndex)], v_texCoord);\n"
 "}"
 ;
 
