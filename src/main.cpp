@@ -15,27 +15,21 @@
 #include "program/file_dialog.h"
 #include "program/interface.h"
 #include "program/json_io.h"
+#include "program/context.h"
 
 UI::Font font;
 
 BackgroundTexture bg;
-bool imageLoaded = false;
-bool imageLoadError = false;
 
-UI::Image image;
 Vector3 imagePosition, imageStartPos;
 f32 scale = 3.0f;
-
-std::string fullpath, filename = "Empty";
-
-gn::darray<Animation> animations;
-s32 selectedAnimationIndex = -1;
-s32 selectedFrameIndex = -1;
 
 bool isDragging = false;
 UI::Rect drawingRect;
 
 f32 maxNameWidth, maxAllowedNameLength = 15;
+
+Context context;
 
 inline bool MouseInRect(Application& app, f32 x, f32 y, f32 w, f32 h)
 {
@@ -49,9 +43,8 @@ int main()
     Application app("Spedit-Debug", 1028, 720, false);
     app.SetVsync(false);
 #   else
-    Application app("Spedit-Debug", 1028, 720, false);
-    // Application app("Spedit", 1920, 1080, false);
-    // app.SetMaximize(true);
+    Application app("Spedit", 1920, 1080, false);
+    app.SetMaximize(true);
     app.SetVsync(true);
 #   endif
 
@@ -100,7 +93,7 @@ int main()
             }
         }
 
-        if (selectedAnimationIndex > -1)
+        if (context.selectedAnimationIndex > -1)
         {   // Dragging Frame Rect
             static Vector2 mouseStartPos;
 
@@ -111,7 +104,7 @@ int main()
                     mouseStartPos.x = std::max((f32) app.mouseX, imagePosition.x);
                     mouseStartPos.y = std::max((f32) app.mouseY, imagePosition.y);
                     isDragging = true;
-                    selectedFrameIndex = -1;
+                    context.selectedFrameIndex = -1;
                 }
             } else if (isDragging && app.GetMouseButton(MOUSE(1)))
             {
@@ -138,9 +131,9 @@ int main()
             {
                 if (drawingRect.size.x > 0.0f && drawingRect.size.y > 0.0f)
                 {
-                    selectedFrameIndex = animations[selectedAnimationIndex].frames.size();
+                    context.selectedFrameIndex = context.CurrentAnimation().frames.size();
                     
-                    AnimationFrame& frame = animations[selectedAnimationIndex].frames.emplace_back();
+                    AnimationFrame& frame = context.CurrentAnimation().frames.emplace_back();
                     frame.topLeft.x = drawingRect.topLeft.x;
                     frame.topLeft.y = drawingRect.topLeft.y;
 
@@ -162,15 +155,15 @@ int main()
         {   // Render Image
             UI::RenderImage(app, bg.image, imagePosition);
 
-            if (imageLoaded)
+            if (context.imageLoaded)
             {
-                UI::RenderImage(app, image, imagePosition);
+                UI::RenderImage(app, context.image, imagePosition);
 
-                if (selectedAnimationIndex > -1)
+                if (context.selectedAnimationIndex > -1)
                 {
-                    for (int i = 0; i < animations[selectedAnimationIndex].frames.size(); i++)
+                    for (int i = 0; i < context.CurrentAnimation().frames.size(); i++)
                     {
-                        AnimationFrame& frame = animations[selectedAnimationIndex].frames[i];
+                        AnimationFrame& frame = context.CurrentAnimation().frames[i];
                         UI::Rect displayRect;
                     
                         displayRect.topLeft.x = scale * frame.topLeft.x + imagePosition.x;
@@ -178,9 +171,9 @@ int main()
                     
                         displayRect.size = scale * frame.size;
 
-                        const Vector4& color = (i == selectedFrameIndex) ? orange : green;
+                        const Vector4& color = (i == context.selectedFrameIndex) ? orange : green;
                         if (UI::RenderButton(app, GenUIIDWithSec(i), displayRect, color, lgreen, orange))
-                            selectedFrameIndex = (i == selectedFrameIndex) ? -1 : i;
+                            context.selectedFrameIndex = (i == context.selectedFrameIndex) ? -1 : i;
                     }
 
                     if (isDragging)
@@ -200,7 +193,7 @@ int main()
 
         {   // Meta data and Open and Save Options
             char buffer[128];
-            sprintf(buffer, "File: %s\nSize: %d x %d px", filename.c_str(), image.width, image.height);
+            sprintf(buffer, "File: %s\nSize: %d x %d px", context.filename.c_str(), context.image.width, context.image.height);
             UI::RenderTextBox(app, buffer, font, white, grey, Vector2(10.0f, 5.0f), Vector3(10.0f, 10.0f, 0.0f));
 
             f32 height = UI::GetRenderedTextSize(buffer, font).y;
@@ -216,47 +209,47 @@ int main()
                     std::string extension = newpath.substr(newpath.find_last_of('.'));
 
                     if (extension == ".json")
-                        imageLoadError = !LoadFromJSONFile(newpath, fullpath, filename, animations, image, newImageLoaded);
+                        context.imageLoadError = !LoadFromJSONFile(newpath, context);
                     else
                     {
-                        ResetAnimations(animations);
+                        ResetAnimations(context.animations);
 
-                        imageLoadError = false;
-                        fullpath = std::move(newpath);
+                        context.imageLoadError = false;
+                        context.fullpath = std::move(newpath);
 
-                        ResetAnimations(animations);
+                        ResetAnimations(context.animations);
                         
                         UI::Image temp;
-                        imageLoadError = !temp.Load(fullpath.c_str());
+                        context.imageLoadError = !temp.Load(context.fullpath.c_str());
 
-                        if (!imageLoadError)
+                        if (!context.imageLoadError)
                         {
                             if (newImageLoaded)
-                                image.Free();
+                                context.image.Free();
 
-                            image = temp;
+                            context.image = temp;
                         }
                     }
 
-                    imageLoaded = imageLoaded || newImageLoaded;
+                    context.imageLoaded = context.imageLoaded || newImageLoaded;
                 
-                    if (!imageLoadError)
+                    if (!context.imageLoadError)
                     {
-                        selectedFrameIndex = selectedAnimationIndex = -1;
+                        context.selectedFrameIndex = context.selectedAnimationIndex = -1;
 
                         bg.Free();
 
                         scale = 3.0f;
-                        image.SetScale(scale);
+                        context.image.SetScale(scale);
 
-                        bg.Create(image.width, image.height);
+                        bg.Create(context.image.width, context.image.height);
                         bg.SetScale(scale);
 
-                        imagePosition.x = (app.refScreenWidth -  image.scaledWidth)  / 2.0f;
-                        imagePosition.y = (app.refScreenHeight - image.scaledHeight) / 2.0f;
+                        imagePosition.x = (app.refScreenWidth -  context.image.scaledWidth)  / 2.0f;
+                        imagePosition.y = (app.refScreenHeight - context.image.scaledHeight) / 2.0f;
 
-                        size_t start = fullpath.find_last_of('\\');
-                        filename = fullpath.substr(start + 1);
+                        size_t start = context.fullpath.find_last_of('\\');
+                        context.filename = context.fullpath.substr(start + 1);
 
     #                   ifdef DEBUG
                         std::string windowName = "Spedit-Debug : ";
@@ -264,11 +257,11 @@ int main()
                         std::string windowName = "Spedit : ";
     #                   endif
 
-                        windowName += filename;
+                        windowName += context.filename;
                         app.SetWindowTitle(windowName.c_str());
 
     #                   ifdef DEBUG
-                        std::cout << "Opening File: " << filename << std::endl;
+                        std::cout << "Opening File: " << context.filename << std::endl;
     #                   endif
                     }
 
@@ -277,14 +270,11 @@ int main()
 
             Vector2 size = UI::GetRenderedTextSize("Open", font);
 
-            if (imageLoaded && UI::RenderTextButton(app, GenUIID(), "Save", font, { 10.0f, 5.0f }, { 40.0f + size.x, height + 30.0f, 0.0f }))
-            {
-                // @Todo: Fill this later
-                OutputToJSONFile(fullpath, filename, animations);
-            }
+            if (context.imageLoaded && UI::RenderTextButton(app, GenUIID(), "Save", font, { 10.0f, 5.0f }, { 40.0f + size.x, height + 30.0f, 0.0f }))
+                OutputToJSONFile(context);
         }
 
-        if (imageLoaded)
+        if (context.imageLoaded)
         {   // Animation data
             const f32 vgap = 10.0f;
             const f32 hgap = 20.0f;
@@ -302,15 +292,15 @@ int main()
             }
 
             {   // List all animations
-                for (int i = 0; i < animations.size(); i++)
+                for (int i = 0; i < context.animations.size(); i++)
                 {
-                    std::string_view name = animations[i].name;
+                    std::string_view name = context.animations[i].name;
 
                     Vector2 size = UI::GetRenderedTextSize(name, font);
                     Vector3 topLeft(app.refScreenWidth - maxNameWidth - 10.0f - hgap, height, 0.0f);
 
                     // Render a marker for selected animation
-                    if (i == selectedAnimationIndex)
+                    if (i == context.selectedAnimationIndex)
                     {
                         static std::string_view marker = "> ";
                         static f32 offset = UI::GetRenderedTextSize(marker, font).x;
@@ -320,7 +310,7 @@ int main()
                         UI::RenderText(app, marker, font, white, tl);
                     }
 
-                    std::string concatenatedName = animations[i].name;
+                    std::string concatenatedName = context.animations[i].name;
                     if (name.length() > maxAllowedNameLength)
                     {
                         concatenatedName.erase(concatenatedName.begin() + maxAllowedNameLength, concatenatedName.end());
@@ -329,22 +319,22 @@ int main()
 
                     if (UI::RenderTextButton(app, GenUIIDWithSec(i), concatenatedName, font, Vector2(10.0f, 5.0f), topLeft))
                     {
-                        if (i == selectedAnimationIndex)
-                            selectedAnimationIndex = -1;
+                        if (i == context.selectedAnimationIndex)
+                            context.selectedAnimationIndex = -1;
                         else
-                            selectedAnimationIndex = i;
+                            context.selectedAnimationIndex = i;
 
-                        selectedFrameIndex = -1;
+                        context.selectedFrameIndex = -1;
                     }
 
                     height += size.y + vgap;
 
-                    if (i == selectedAnimationIndex)
+                    if (i == context.selectedAnimationIndex)
                     {
-                        Vector2 size = RenderAnimationInfo(app, font, animations, selectedAnimationIndex, Vector3(topLeft.x + hgap / 2.0f, height, 0.0f));
+                        Vector2 size = RenderAnimationInfo(app, font, context, Vector3(topLeft.x + hgap / 2.0f, height, 0.0f));
 
                         // If animation gets deleted, then walk back one step
-                        if (selectedAnimationIndex == -1)
+                        if (context.selectedAnimationIndex == -1)
                             i--;
 
                         height += size.y + vgap;
@@ -354,14 +344,14 @@ int main()
                 }
             }
 
-            if (selectedFrameIndex != -1)
+            if (context.selectedFrameIndex != -1)
             {   // List Animation Frame Data
-                RenderFrameInfo(app, font, animations[selectedAnimationIndex].frames, selectedFrameIndex);
+                RenderFrameInfo(app, font, context);
             }
 
-            if (RenderNewAnimationDialog(app, font, animations))
+            if (RenderNewAnimationDialog(app, font, context))
             {
-                std::string_view name = animations[animations.size() - 1].name;
+                std::string_view name = context.animations[context.animations.size() - 1].name;
                 
                 if (name.length() > maxAllowedNameLength)
                 {
@@ -374,8 +364,8 @@ int main()
                     maxNameWidth = std::max(size.x, maxNameWidth);
                 }
 
-                selectedAnimationIndex = animations.size() - 1;
-                selectedFrameIndex = -1;
+                context.selectedAnimationIndex = context.animations.size() - 1;
+                context.selectedFrameIndex = -1;
             }
         }
 
@@ -401,7 +391,7 @@ int main()
             frameCount++;
         }
 #       else
-        if (imageLoadError)
+        if (context.imageLoadError)
         {   // Show Error if image couldn't be loaded
             std::string_view text = "Error loading file...";
             Vector2 size = UI::GetRenderedTextSize(text, font);
@@ -429,7 +419,7 @@ int main()
         scale += scrollY * scrollSpeed * (0.15f * scale);
         scale = Clamp(scale, 0.5f, 50.0f);
 
-        image.SetScale(scale);
+        context.image.SetScale(scale);
         bg.SetScale(scale);
 
         imagePosition.x = imagePosition.x - (bg.image.scaledWidth * relativePosX);

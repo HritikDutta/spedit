@@ -10,6 +10,7 @@
 #include "platform/fileio.h"
 #include "animation.h"
 #include "json/parser.h"
+#include "context.h"
 
 constexpr char fileFormatStart[] =
 "{\n"
@@ -62,31 +63,31 @@ std::string EscapedString(const std::string& str)
     return std::move(res);
 }
 
-void OutputToJSONFile(const std::string& fullpath, const std::string& filename, const gn::darray<Animation>& animations)
+void OutputToJSONFile(const Context& context)
 {
 #   ifdef DEBUG
-    std::cout << "Outputing file for " << filename << std::endl;
+    std::cout << "Outputing file for " << context.filename << std::endl;
 #   endif
 
-    size_t lastSlash = fullpath.find_last_of('\\');
-    std::string directory = fullpath.substr(0, lastSlash);
+    size_t lastSlash = context.fullpath.find_last_of('\\');
+    std::string directory = context.fullpath.substr(0, lastSlash);
 
-    size_t lastDot = fullpath.find_last_of('.');
-    std::string outfileName = fullpath.substr(0, lastDot) + ".json";
+    size_t lastDot = context.fullpath.find_last_of('.');
+    std::string outfileName = context.fullpath.substr(0, lastDot) + ".json";
 
     FILE* outfile = fopen(outfileName.c_str(), "wb");
     ASSERT(outfile);
 
-    fprintf(outfile, fileFormatStart, EscapedString(directory).c_str(), filename.c_str());
+    fprintf(outfile, fileFormatStart, EscapedString(directory).c_str(), context.filename.c_str());
 
-    for (int i = 0; i < animations.size(); i++)
+    for (int i = 0; i < context.animations.size(); i++)
     {
         if (i > 0)
             fprintf(outfile, ",\n");
         else
             fprintf(outfile, "\n");
 
-        const Animation& animation = animations[i];
+        const Animation& animation = context.animations[i];
         fprintf(outfile, animationFormatStart, animation.name.c_str(), animation.GetLoopTypeName(), animation.frameRate);
 
         for (int j = 0; j < animation.frames.size(); j++)
@@ -106,7 +107,7 @@ void OutputToJSONFile(const std::string& fullpath, const std::string& filename, 
         fprintf(outfile, animationFormatEnd);
     }
 
-    if (animations.size() > 0)
+    if (context.animations.size() > 0)
         fprintf(outfile, "\n    ");
 
     fprintf(outfile, fileFormatEnd);
@@ -114,7 +115,7 @@ void OutputToJSONFile(const std::string& fullpath, const std::string& filename, 
     fclose(outfile);
 }
 
-bool LoadFromJSONFile(const std::string& jsonfile, std::string& fullpath, std::string& filename, gn::darray<Animation>& animations, UI::Image& image, bool imageLoaded)
+bool LoadFromJSONFile(const std::string& jsonfile, Context& context)
 {
     std::string json = LoadFile(jsonfile);
 
@@ -125,21 +126,21 @@ bool LoadFromJSONFile(const std::string& jsonfile, std::string& fullpath, std::s
     auto docObject = document.start().object();
 
     std::string directory = docObject["directory"].string();
-    filename = docObject["file"].string();
-    fullpath = directory + '\\' + filename;
+    context.filename = docObject["file"].string();
+    context.fullpath = directory + '\\' + context.filename;
 
     UI::Image temp;
-    if (!temp.Load(fullpath))
+    if (!temp.Load(context.fullpath))
         return false;
 
-    animations.clear();
+    context.animations.clear();
 
-    image = temp;
+    context.image = temp;
 
     for (auto& animObject : docObject["animations"].array())
     {
         auto& name = animObject["name"].string();
-        Animation& animation = animations.emplace_back(name);
+        Animation& animation = context.animations.emplace_back(name);
 
         auto& loopTypeName = animObject["loopType"].string();
         if (loopTypeName == "None")

@@ -27,6 +27,7 @@ struct Animation
     gn::darray<AnimationFrame> frames;
 
     Animation(const std::string& name);
+    ~Animation() = default;
 
     const char* GetLoopTypeName() const;
 };

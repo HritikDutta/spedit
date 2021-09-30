@@ -216,7 +216,7 @@ void Image::SetScale(const Vector2& scale)
 bool Image::Load(const std::string_view& filepath)
 {
     s32 bytesPP;
-    Byte* pixels = stbi_load(filepath.data(), &width, &height, &bytesPP, 0);
+    pixels = stbi_load(filepath.data(), &width, &height, &bytesPP, 0);
     ASSERT(pixels != nullptr);
 
     if (pixels == nullptr)
@@ -256,20 +256,28 @@ bool Image::Load(const std::string_view& filepath)
     scaledWidth = width;
     scaledHeight = height;
 
-    stbi_image_free(pixels);
-
     return true;
 }
 
 void Image::Free()
 {
+    if (!pixels)
+        return;
+
     glDeleteTextures(1, &texID);
+    stbi_image_free(pixels);
+    pixels = nullptr;
 }
 
 // @Todo: This doesn't work so FIX IT
 void SetActive(ID id)
 {
     uiData.active = id;
+}
+
+bool SomethingIsActive()
+{
+    return uiData.active != UIInvalid();
 }
 
 static void AddTexturedQuad(Application& app, const Rect& rect, Vector4 texCoords, u32 texID, Vector4 color)

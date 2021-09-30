@@ -45,6 +45,7 @@ struct Image
     u32 texID;
     s32 width, height;
     s32 scaledWidth, scaledHeight;
+    u8* pixels= nullptr;
 
     void SetScale(const Vector2& scale);
     bool Load(const std::string_view& filepath);
@@ -52,6 +53,7 @@ struct Image
 };
 
 void SetActive(ID id);
+bool SomethingIsActive();
 
 Vector2 GetRenderedTextSize(const std::string_view& text, const Font& font);
 
