@@ -60,6 +60,9 @@ static void FramebufferSizeCallback(GLFWwindow* window, int width, int height)
     app->windowResizeCallback(*app);
 
     glViewport(0, 0, width, height);
+
+    app->onRender(*app);
+    glfwSwapBuffers(window);
 }
 
 static void ScrollCallback(GLFWwindow* window, f64 xoffset, f64 yoffset)
@@ -72,6 +75,12 @@ static void CharacterCallback(GLFWwindow* window, u32 codepoint)
 {
     Application* app = (Application*) glfwGetWindowUserPointer(window);
     app->charCallback(*app, codepoint);
+}
+
+static void DropCallback(GLFWwindow* window, s32 count, const char** paths)
+{
+    Application* app = (Application*) glfwGetWindowUserPointer(window);
+    app->dropCallback(*app, count, paths);
 }
 
 Application::Application(const char* title, int width, int height, bool fullscreen)
@@ -101,12 +110,14 @@ Application::Application(const char* title, int width, int height, bool fullscre
     onInit = onUpdate = onRender = windowResizeCallback = mousePositionCallback = [](Application&){};
     scrollCallback = [](Application&, f64, f64){};
     charCallback = [](Application&, u32){};
+    dropCallback = [](Application&, s32, const char**){};
 
     glfwSetWindowUserPointer(window, this);
     glfwSetCursorPosCallback(window, CursorPositionCallback);
     glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
     glfwSetCharCallback(window, CharacterCallback);
     glfwSetScrollCallback(window, ScrollCallback);
+    glfwSetDropCallback(window, DropCallback);
 
     if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress))
         return;

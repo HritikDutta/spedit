@@ -37,6 +37,67 @@ inline bool MouseInRect(Application& app, f32 x, f32 y, f32 w, f32 h)
            app.mouseY >= y && app.mouseY <= y + h;
 }
 
+void OpenFile(Application& app, const std::string& newpath)
+{
+    // Should use string_view but welp
+    std::string extension = newpath.substr(newpath.find_last_of('.'));
+
+    if (extension == ".json")
+        context.imageLoadError = !LoadFromJSONFile(newpath, context);
+    else
+    {
+        ResetAnimations(context.animations);
+
+        context.imageLoadError = false;
+        context.fullpath = std::move(newpath);
+
+        ResetAnimations(context.animations);
+        
+        UI::Image temp;
+        context.imageLoadError = !temp.Load(context.fullpath.c_str());
+
+        if (!context.imageLoadError)
+        {
+            context.image.Free();
+            context.image = temp;
+        }
+    }
+
+    context.imageLoaded = true;
+
+    if (!context.imageLoadError)
+    {
+        context.selectedFrameIndex = context.selectedAnimationIndex = -1;
+
+        bg.Free();
+
+        scale = 3.0f;
+        context.image.SetScale(scale);
+
+        bg.Create(context.image.width, context.image.height);
+        bg.SetScale(scale);
+
+        imagePosition.x = (app.refScreenWidth -  context.image.scaledWidth)  / 2.0f;
+        imagePosition.y = (app.refScreenHeight - context.image.scaledHeight) / 2.0f;
+
+        size_t start = context.fullpath.find_last_of('\\');
+        context.filename = context.fullpath.substr(start + 1);
+
+#                   ifdef DEBUG
+        std::string windowName = "Spedit-Debug : ";
+#                   else
+        std::string windowName = "Spedit : ";
+#                   endif
+
+        windowName += context.filename;
+        app.SetWindowTitle(windowName.c_str());
+
+#                   ifdef DEBUG
+        std::cout << "Opening File: " << context.filename << std::endl;
+#                   endif
+    }
+}
+
 int main()
 {
 #   ifdef DEBUG
@@ -204,68 +265,7 @@ int main()
                 bool newImageLoaded = !newpath.empty();
 
                 if (newImageLoaded)
-                {
-                    // Should use string_view but welp
-                    std::string extension = newpath.substr(newpath.find_last_of('.'));
-
-                    if (extension == ".json")
-                        context.imageLoadError = !LoadFromJSONFile(newpath, context);
-                    else
-                    {
-                        ResetAnimations(context.animations);
-
-                        context.imageLoadError = false;
-                        context.fullpath = std::move(newpath);
-
-                        ResetAnimations(context.animations);
-                        
-                        UI::Image temp;
-                        context.imageLoadError = !temp.Load(context.fullpath.c_str());
-
-                        if (!context.imageLoadError)
-                        {
-                            if (newImageLoaded)
-                                context.image.Free();
-
-                            context.image = temp;
-                        }
-                    }
-
-                    context.imageLoaded = context.imageLoaded || newImageLoaded;
-                
-                    if (!context.imageLoadError)
-                    {
-                        context.selectedFrameIndex = context.selectedAnimationIndex = -1;
-
-                        bg.Free();
-
-                        scale = 3.0f;
-                        context.image.SetScale(scale);
-
-                        bg.Create(context.image.width, context.image.height);
-                        bg.SetScale(scale);
-
-                        imagePosition.x = (app.refScreenWidth -  context.image.scaledWidth)  / 2.0f;
-                        imagePosition.y = (app.refScreenHeight - context.image.scaledHeight) / 2.0f;
-
-                        size_t start = context.fullpath.find_last_of('\\');
-                        context.filename = context.fullpath.substr(start + 1);
-
-    #                   ifdef DEBUG
-                        std::string windowName = "Spedit-Debug : ";
-    #                   else
-                        std::string windowName = "Spedit : ";
-    #                   endif
-
-                        windowName += context.filename;
-                        app.SetWindowTitle(windowName.c_str());
-
-    #                   ifdef DEBUG
-                        std::cout << "Opening File: " << context.filename << std::endl;
-    #                   endif
-                    }
-
-                }
+                    OpenFile(app, newpath);
             }
 
             Vector2 size = UI::GetRenderedTextSize("Open", font);
@@ -424,6 +424,12 @@ int main()
 
         imagePosition.x = imagePosition.x - (bg.image.scaledWidth * relativePosX);
         imagePosition.y = imagePosition.y - (bg.image.scaledHeight * relativePosY);
+    };
+
+    app.dropCallback = [](Application& app, s32 count, const char** paths)
+    {
+        // Can only open 1 file
+        OpenFile(app, paths[0]);
     };
 
     app.Run();

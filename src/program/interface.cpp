@@ -204,9 +204,9 @@ static void SplitSheet(Context& context, Vector2 frameSize)
 
     f32 yEnd = context.image.height - frameSize.y;
     f32 xEnd = context.image.width - frameSize.x;
-    for (f32 y = 0.0f; y < yEnd; y += frameSize.y)
+    for (f32 y = 0.0f; y <= yEnd; y += frameSize.y)
     {
-        for (f32 x = 0.0f; x < xEnd; x += frameSize.x)
+        for (f32 x = 0.0f; x <= xEnd; x += frameSize.x)
         {
             AnimationFrame frame;
             frame.topLeft = Vector2(x, y);

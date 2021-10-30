@@ -49,5 +49,7 @@ struct Application
     void (*scrollCallback)(Application& app, f64 scrollX, f64 scrollY);
     void (*charCallback)(Application& app, u32 codepoint);
 
+    void (*dropCallback)(Application& app, s32 count, const char** paths);
+
     static int activeApps;
 };
