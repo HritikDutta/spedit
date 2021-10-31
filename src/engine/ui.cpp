@@ -227,7 +227,7 @@ bool Image::Load(const std::string_view& filepath)
     {
         case 3:
         {
-            internalFormat = GL_SRGB8;
+            internalFormat = GL_RGB8;
             format = GL_RGB;
         } break;
 
