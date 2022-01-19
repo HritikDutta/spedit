@@ -29,10 +29,10 @@ constexpr char animationFormatStart[] =
 
 constexpr char frameFormat[] =
 "                {\n"
-"                    \"x\": %d,\n"
-"                    \"y\": %d,\n"
-"                    \"w\": %d,\n"
-"                    \"h\": %d,\n"
+"                    \"left\": %d,\n"
+"                    \"bottom\": %d,\n"
+"                    \"right\": %d,\n"
+"                    \"top\": %d,\n"
 "                    \"pivot_x\": %f,\n"
 "                    \"pivot_y\": %f\n"
 "                }"
@@ -98,7 +98,9 @@ void OutputToJSONFile(const Context& context)
                 fprintf(outfile, "\n");
             
             const AnimationFrame& frame = animation.frames[j];
-            fprintf(outfile, frameFormat, (int) frame.topLeft.x, (int) frame.topLeft.y, (int) frame.size.x, (int) frame.size.y, frame.pivot.x, frame.pivot.y);
+
+            // Inverting y axis texCoords
+            fprintf(outfile, frameFormat, (int) frame.topLeft.x, context.image.height - ((int) frame.topLeft.y + (int) frame.size.y), (int) frame.topLeft.x + (int) frame.size.x, context.image.height - (int) frame.topLeft.y, frame.pivot.x, frame.pivot.y);
         }
 
         if (animation.frames.size() > 0)
@@ -156,10 +158,10 @@ bool LoadFromJSONFile(const std::string& jsonfile, Context& context)
         {
             AnimationFrame& frame = animation.frames.emplace_back();
 
-            frame.topLeft.x = frameObject["x"].int64();
-            frame.topLeft.y = frameObject["y"].int64();
-            frame.size.x = frameObject["w"].int64();
-            frame.size.y = frameObject["h"].int64();
+            frame.topLeft.x = frameObject["left"].int64();
+            frame.topLeft.y = context.image.height - frameObject["top"].int64();
+            frame.size.x = frameObject["right"].int64() - frame.topLeft.x;
+            frame.size.y = frameObject["top"].int64() - frameObject["bottom"].int64();
 
             frame.pivot.x = frameObject["pivot_x"].float64();
             frame.pivot.y = frameObject["pivot_y"].float64();

@@ -111,6 +111,8 @@ void Init()
     uiData.hot = uiData.active = UIInvalid();
 
     InitWhiteTexture(32, 32);
+
+    stbi_set_flip_vertically_on_load(true);
 }
 
 void Begin()
@@ -349,7 +351,7 @@ static void AddTexturedQuad(Application& app, const Rect& rect, Vector4 texCoord
 
 static inline void AddColouredQuad(Application& app, const Rect& rect, Vector4 color)
 {
-    Vector4 texCoords { 0.0f, 0.0f, 1.0f, 1.0f };
+    Vector4 texCoords { 0.0f, 1.0f, 1.0f, 0.0f };
     AddTexturedQuad(app, rect, texCoords, uiData.whiteTextureID, color);
 }
 
@@ -504,9 +506,9 @@ void RenderImage(Application& app, Image& image, Vector3 topLeft, Vector4 tint)
     rect.size.y = std::min(app.refScreenHeight - rect.topLeft.y, (f32) image.scaledHeight - amountCoveredY);
 
     f32 s1 = amountCoveredX / image.scaledWidth;
-    f32 t1 = amountCoveredY / image.scaledHeight;
+    f32 t1 = 1.0f - amountCoveredY / image.scaledHeight;
     f32 s2 = (rect.size.x + amountCoveredX) / image.scaledWidth;
-    f32 t2 = (rect.size.y + amountCoveredY) / image.scaledHeight;
+    f32 t2 = 1.0f - (rect.size.y + amountCoveredY) / image.scaledHeight;
 
     Vector4 texCoords(s1, t1, s2, t2);
     AddTexturedQuad(app, rect, texCoords, image.texID, tint);
