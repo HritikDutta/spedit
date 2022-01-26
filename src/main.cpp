@@ -196,7 +196,7 @@ int main()
                     
                     AnimationFrame& frame = context.CurrentAnimation().frames.emplace_back();
                     frame.topLeft.x = drawingRect.topLeft.x;
-                    frame.topLeft.y = drawingRect.topLeft.y;
+                    frame.topLeft.y = context.image.height - drawingRect.topLeft.y;
 
                     frame.size.x = drawingRect.size.x;
                     frame.size.y = drawingRect.size.y;
@@ -228,7 +228,7 @@ int main()
                         UI::Rect displayRect;
                     
                         displayRect.topLeft.x = scale * frame.topLeft.x + imagePosition.x;
-                        displayRect.topLeft.y = scale * frame.topLeft.y + imagePosition.y;
+                        displayRect.topLeft.y = scale * (context.image.height - frame.topLeft.y) + imagePosition.y;
                     
                         displayRect.size = scale * frame.size;
 

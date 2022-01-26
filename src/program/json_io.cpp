@@ -100,7 +100,7 @@ void OutputToJSONFile(const Context& context)
             const AnimationFrame& frame = animation.frames[j];
 
             // Inverting y axis texCoords
-            fprintf(outfile, frameFormat, (int) frame.topLeft.x, context.image.height - ((int) frame.topLeft.y + (int) frame.size.y), (int) frame.topLeft.x + (int) frame.size.x, context.image.height - (int) frame.topLeft.y, frame.pivot.x, frame.pivot.y);
+            fprintf(outfile, frameFormat, (int) frame.topLeft.x, (int) frame.topLeft.y - (int) frame.size.y, (int) frame.topLeft.x + (int) frame.size.x, (int) frame.topLeft.y, frame.pivot.x, frame.pivot.y);
         }
 
         if (animation.frames.size() > 0)
@@ -159,7 +159,7 @@ bool LoadFromJSONFile(const std::string& jsonfile, Context& context)
             AnimationFrame& frame = animation.frames.emplace_back();
 
             frame.topLeft.x = frameObject["left"].int64();
-            frame.topLeft.y = context.image.height - frameObject["top"].int64();
+            frame.topLeft.y = frameObject["top"].int64();
             frame.size.x = frameObject["right"].int64() - frame.topLeft.x;
             frame.size.y = frameObject["top"].int64() - frameObject["bottom"].int64();
 

@@ -176,9 +176,9 @@ static void RenderRenameAnimationDialog(Application& app, const UI::Font& font, 
 
 static bool FrameNotEmpty(const Context& context, const AnimationFrame& frame)
 {
-    u32 yStart = frame.topLeft.y;
+    u32 yStart = frame.topLeft.y - frame.size.y;
     u32 xStart = frame.topLeft.x;
-    u32 yEnd   = frame.topLeft.y + frame.size.y;
+    u32 yEnd   = frame.topLeft.y;
     u32 xEnd   = frame.topLeft.x + frame.size.x;
 
     for (u32 y = yStart; y < yEnd; y++)
@@ -204,7 +204,7 @@ static void SplitSheet(Context& context, Vector2 frameSize)
 
     f32 yEnd = context.image.height - frameSize.y;
     f32 xEnd = context.image.width - frameSize.x;
-    for (f32 y = 0.0f; y <= yEnd; y += frameSize.y)
+    for (f32 y = context.image.height; y >= frameSize.y; y -= frameSize.y)
     {
         for (f32 x = 0.0f; x <= xEnd; x += frameSize.x)
         {
